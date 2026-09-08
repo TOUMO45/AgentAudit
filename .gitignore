@@ -23,3 +23,6 @@ Thumbs.db
 .env
 *.pem
 aws-credentials*
+
+# Local HMAC signing key — never commit
+.agentaudit/
