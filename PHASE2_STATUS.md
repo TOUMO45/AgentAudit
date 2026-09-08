@@ -18,7 +18,7 @@ hardened-passes self-audits, badge regeneration).
 | 2.6 | Real-world verification | ✅ DONE | calculator.py TP hand-verified; shell.py FP fixed; FN deferred |
 | 2.7 | Scorecard UI overhaul | ✅ DONE | CVD palette ΔE 25.4; SVG shield; collapsed cards; visual sent |
 | 2.8 | CI PR-comment + grade badge | ✅ DONE | **PR #1: github-actions[bot] posted the findings table** (verified, then closed) |
-| 2.9 | Static demo hosting (GitHub Pages) | ⏳ code done, awaiting Pages enable | needs repo Settings→Pages→Source: GitHub Actions (user consent) |
+| 2.9 | Static demo hosting (GitHub Pages) | ✅ DONE | live at https://toumo45.github.io/AgentAudit/ — byte-identical to local scorecard |
 
 ## CI-portability bugs found & fixed while going green (a red baseline is work item #1)
 1. Integrity baseline was not portable: byte-hashed a CRLF working tree while
@@ -29,8 +29,12 @@ hardened-passes self-audits, badge regeneration).
    `sys.path` → added a root `conftest.py`.
 4. `guard.sh` needed the git executable bit for `./guard.sh` on Linux.
 
-## Remaining
-- 2.9 Pages enablement is a persistent repo-settings change (system safety rule:
-  explicit permission required). Awaiting user go-ahead to enable via API, or the
-  user toggles Settings → Pages → Source: "GitHub Actions"; the `pages` workflow
-  then deploys the static scorecard to https://toumo45.github.io/AgentAudit/.
+## Loop-level verifier — all green
+1. Full pytest suite green (incl. 2.1–2.5) — locally and on CI. ✅
+2. `guard.sh check` → INTEGRITY OK. ✅
+3. `references/real_world_findings.md` with ≥1 hand-verified real finding. ✅
+4. Both scorecards render; delivered for the human visual check. ✅
+5. Throwaway PR (#1) proved the CI comment posts real content (then closed). ✅
+6. No signing key anywhere in git history. ✅
+
+**Phase 2 complete.** GitHub Pages enabled with the user's explicit consent.
