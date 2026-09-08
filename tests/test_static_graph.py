@@ -13,7 +13,10 @@ POSITIVES = [
 CONTROLS = [
     "fixtures/patterns/idor_hardened.py",
     "fixtures/patterns/confused_deputy_hardened.py",
+    "fixtures/patterns/confused_deputy_flag_control.py",  # regression lock (item 2.6 FP)
     "fixtures/patterns/excessive_agency_hardened.py",
+    "fixtures/patterns/secrets_hardened.py",
+    "fixtures/patterns/ssrf_hardened.py",
     "fixtures/hardened_agent.py",
     "fixtures/empty_stub_agent.py",
 ]

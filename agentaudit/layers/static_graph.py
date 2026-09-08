@@ -343,10 +343,31 @@ def _detect_idor(tool: ToolDef, file: str) -> Finding | None:
     return None
 
 
+def _nonpayload_params(fn: ast.FunctionDef) -> set[str]:
+    """Params that cannot carry an injection payload: bool/int-typed or
+    bool/int-defaulted (flags like ``ignore_errors``, ``verbose``, ``timeout``).
+    Excluding these removes a whole class of confused-deputy false positives
+    (verified against strands_tools/shell.py: the ``ignore_errors`` flag)."""
+    out: set[str] = set()
+    a = fn.args
+    params = [*a.posonlyargs, *a.args, *a.kwonlyargs]
+    for p in params:
+        ann = _dotted_name(p.annotation).split(".")[-1] if p.annotation is not None else ""
+        if ann in {"bool", "int", "float"}:
+            out.add(p.arg)
+    # bool/int defaults
+    defaulted = list(zip([*a.posonlyargs, *a.args][-len(a.defaults):] if a.defaults else [], a.defaults))
+    defaulted += list(zip(a.kwonlyargs, a.kw_defaults or []))
+    for param, default in defaulted:
+        if isinstance(default, ast.Constant) and isinstance(default.value, (bool, int, float)):
+            out.add(param.arg)
+    return out
+
+
 def _detect_confused_deputy(tool: ToolDef, file: str) -> Finding | None:
     validated = _validated_aliases(tool.fn)
     ctx_derived = _context_derived_aliases(tool.fn, tool.ctx_params)
-    untrusted = set(tool.untrusted_params)
+    untrusted = set(tool.untrusted_params) - _nonpayload_params(tool.fn)
 
     # Propagate untrusted-ness through plain `x = param` aliases.
     for node in ast.walk(tool.fn):
