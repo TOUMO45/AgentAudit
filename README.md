@@ -1,5 +1,7 @@
 # AgentAudit
 
+![AgentAudit grade](docs/agentaudit-badge.svg)
+
 **The missing security layer for Strands agents.**
 
 > *Your agent passed the demo. Did it pass the pentest?*
