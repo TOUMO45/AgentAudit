@@ -1,19 +1,36 @@
 # Phase 2 — Status
 
-Section 0 (mandatory pre-flight): **GREEN**
-- `git log --all --full-history -- .agentaudit/signing.key` → empty (no secret in history).
-- `.gitignore` covers `.agentaudit/`; key untracked; signing supports `AGENTAUDIT_SIGNING_KEY`.
-- `guard.sh check` → INTEGRITY OK; full pytest suite green.
-- Pushed Phase-1-complete state to https://github.com/TOUMO45/AgentAudit.git (branch `master`).
+Section 0 (mandatory pre-flight): **GREEN** — no signing key in history, key untracked
+& env-var supported, guard OK, tests green, pushed to
+https://github.com/TOUMO45/AgentAudit (branch `master`).
 
-| Item | Capability | Status |
-|------|-----------|--------|
-| 2.1 | Tool poisoning / rug-pull detection | in progress |
-| 2.2 | Secrets-in-system-prompt check | pending |
-| 2.3 | SSRF-via-tool-param check | pending |
-| 2.4 | Regression corpus wiring | pending |
-| 2.5 | Mutation robustness | pending |
-| 2.6 | Real-world verification | pending |
-| 2.7 | HTML scorecard UI overhaul | pending |
-| 2.8 | CI polish (PR comment + badge) | pending |
-| 2.9 | Static demo hosting (GitHub Pages) | pending |
+CI on GitHub Actions: **agentaudit-ci is GREEN** on a clean Linux/Python-3.11
+checkout (integrity guard, CVD palette check, 81 tests, vulnerable-fails /
+hardened-passes self-audits, badge regeneration).
+
+| Item | Capability | Status | Verifier |
+|------|-----------|--------|----------|
+| 2.1 | Tool poisoning / rug-pull detection | ✅ DONE | day1→day2 = 1 finding; identical = 0 |
+| 2.2 | Secrets-in-system-prompt (regex + entropy) | ✅ DONE | positive 1 finding; env-ref clean |
+| 2.3 | SSRF-via-tool-param | ✅ DONE | positive flagged; allowlist clean |
+| 2.4 | Self-discovering regression corpus | ✅ DONE | new case ⇒ test count ↑, no test edits |
+| 2.5 | Mutation robustness | ✅ DONE | 3 variants × 5 patterns; pos flagged, hardened clean |
+| 2.6 | Real-world verification | ✅ DONE | calculator.py TP hand-verified; shell.py FP fixed; FN deferred |
+| 2.7 | Scorecard UI overhaul | ✅ DONE | CVD palette ΔE 25.4; SVG shield; collapsed cards; visual sent |
+| 2.8 | CI PR-comment + grade badge | ✅ DONE | **PR #1: github-actions[bot] posted the findings table** (verified, then closed) |
+| 2.9 | Static demo hosting (GitHub Pages) | ⏳ code done, awaiting Pages enable | needs repo Settings→Pages→Source: GitHub Actions (user consent) |
+
+## CI-portability bugs found & fixed while going green (a red baseline is work item #1)
+1. Integrity baseline was not portable: byte-hashed a CRLF working tree while
+   `.gitattributes` checks out LF → guard now hashes CR-stripped content.
+2. Baseline captured local `__pycache__/*.pyc` (absent on clean checkout) →
+   guard now prunes them.
+3. `pytest` console script (unlike `python -m pytest`) didn't add repo root to
+   `sys.path` → added a root `conftest.py`.
+4. `guard.sh` needed the git executable bit for `./guard.sh` on Linux.
+
+## Remaining
+- 2.9 Pages enablement is a persistent repo-settings change (system safety rule:
+  explicit permission required). Awaiting user go-ahead to enable via API, or the
+  user toggles Settings → Pages → Source: "GitHub Actions"; the `pages` workflow
+  then deploys the static scorecard to https://toumo45.github.io/AgentAudit/.
