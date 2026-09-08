@@ -404,6 +404,71 @@ def _detect_confused_deputy(tool: ToolDef, file: str) -> Finding | None:
     return None
 
 
+_SSRF_PARAM = re.compile(r"(url|uri|endpoint|webhook|callback|href|link)", re.IGNORECASE)
+_HTTP_SINK_DOTTED = re.compile(
+    r"^(requests|httpx|aiohttp)\.|^urllib\.request\.urlopen$|^urllib\.request\b", re.IGNORECASE
+)
+_HTTP_METHODS = {"get", "post", "put", "delete", "patch", "head", "request", "urlopen", "fetch"}
+_HTTP_BASES = {"requests", "httpx", "session", "client", "http", "aiohttp"}
+_ALLOWLIST_HINT = re.compile(r"(allow|whitelist|permit|urlparse|urlsplit)", re.IGNORECASE)
+
+
+def _detect_ssrf(tool: ToolDef, file: str) -> Finding | None:
+    ssrf_params = [p for p in tool.untrusted_params if _SSRF_PARAM.search(p)]
+    if not ssrf_params:
+        return None
+
+    # An allowlist / URL-parsing guard anywhere in the body clears the flag.
+    for node in ast.walk(tool.fn):
+        if isinstance(node, ast.Name) and _ALLOWLIST_HINT.search(node.id):
+            return None
+        if isinstance(node, ast.Call) and _call_func_leaf(node) in _VALIDATION_CALLS:
+            return None
+
+    for call in _all_calls(tool.fn):
+        dotted = _dotted_name(call.func)
+        leaf = _call_func_leaf(call)
+        base = dotted.split(".")[0] if dotted else ""
+        is_http = bool(_HTTP_SINK_DOTTED.match(dotted)) or (
+            leaf in _HTTP_METHODS and base in _HTTP_BASES
+        ) or leaf == "urlopen"
+        if not is_http:
+            continue
+        used = {n.id for a in call.args for n in ast.walk(a) if isinstance(n, ast.Name)}
+        used |= {n.id for kw in call.keywords for n in ast.walk(kw.value) if isinstance(n, ast.Name)}
+        hit = set(ssrf_params) & used
+        if hit:
+            param = sorted(hit)[0]
+            return Finding(
+                detector="ssrf-via-tool-param",
+                layer=Layer.ARCHITECTURAL,
+                severity=Severity.HIGH,
+                title=f"SSRF: tool '{tool.name}' fetches a caller-controlled URL",
+                description=(
+                    f"Tool '{tool.name}' passes the caller-controlled parameter '{param}' "
+                    f"straight into an HTTP request ('{dotted or leaf}(...)') with no domain "
+                    f"allowlist. A user can point it at internal services "
+                    f"(169.254.169.254, localhost, RFC-1918) — server-side request forgery."
+                ),
+                file=file,
+                line=tool.line,
+                evidence=f"'{param}' -> {dotted or leaf}(...); no allowlist/urlparse guard in body",
+                confidence=Confidence.DETERMINISTIC,
+                remediation=Remediation(
+                    summary="Validate the host against an explicit allowlist before the request.",
+                    before=f"    requests.get({param})",
+                    after=(
+                        f"    host = urlparse({param}).netloc\n"
+                        f"    if host not in ALLOWED_HOSTS:\n"
+                        f"        raise ValueError('host not allowed')\n"
+                        f"    requests.get({param})"
+                    ),
+                ),
+                metadata={"pattern": "ssrf", "param": param, "sink": dotted or leaf},
+            )
+    return None
+
+
 def _detect_excessive_agency(tool: ToolDef, file: str) -> Finding | None:
     name = tool.name.lower()
     read_intent = name.startswith(_READ_PREFIXES) or "read-only" in tool.docstring.lower()
@@ -524,7 +589,7 @@ def analyze(agent_path: str | Path) -> list[Finding]:
 
     findings: list[Finding] = []
     for tool in discover_tools(tree):
-        for detector in (_detect_idor, _detect_confused_deputy, _detect_excessive_agency):
+        for detector in (_detect_idor, _detect_confused_deputy, _detect_excessive_agency, _detect_ssrf):
             f = detector(tool, file)
             if f is not None:
                 findings.append(f)
