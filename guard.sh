@@ -22,7 +22,10 @@ BASELINE=".agentaudit_integrity.sha256"
 
 # Protected set: all ground-truth fixtures + the scorer/detector code.
 collect_paths() {
-  find fixtures -type f | sort
+  # Only committed source — never build artifacts (__pycache__/*.pyc are
+  # gitignored and absent on a clean CI checkout, so including them would make
+  # the baseline non-portable).
+  find fixtures -type f -not -path '*/__pycache__/*' -not -name '*.pyc' | sort
   cat <<'EOF'
 agentaudit/scorer.py
 agentaudit/models.py
