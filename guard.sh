@@ -25,6 +25,7 @@ agentaudit/models.py
 agentaudit/layers/static_graph.py
 agentaudit/layers/cloud_posture.py
 agentaudit/layers/behavioral.py
+agentaudit/layers/supply_chain.py
 EOF
 }
 

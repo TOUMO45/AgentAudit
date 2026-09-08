@@ -7,7 +7,7 @@ layer reports its own status so a skipped layer is explicit in the scorecard.
 
 from __future__ import annotations
 
-from agentaudit.layers import behavioral, cloud_posture, static_graph
+from agentaudit.layers import behavioral, cloud_posture, static_graph, supply_chain
 from agentaudit.models import Layer, LayerReport
 from agentaudit.scorer import score_findings
 from agentaudit.models import Scorecard
@@ -25,13 +25,18 @@ def run_audit(
 
     # Layer 2 — architectural (deterministic, the decisive gate). Runs first.
     static_findings = static_graph.analyze(agent_path)
+    detail = f"static tool-trust graph: {len(static_findings)} finding(s)"
+
+    # Supply-chain rug-pull (imports the agent; must never crash an audit).
+    try:
+        rug = supply_chain.detect_rugpull(agent_path)
+        static_findings = static_findings + rug
+        detail += f"; rug-pull baseline checked ({len(rug)} change(s))"
+    except Exception as e:  # non-importable agent, etc.
+        detail += f"; rug-pull skipped ({type(e).__name__})"
+
     layer_reports.append(
-        LayerReport(
-            Layer.ARCHITECTURAL,
-            "ran",
-            f"static tool-trust graph: {len(static_findings)} finding(s)",
-            static_findings,
-        )
+        LayerReport(Layer.ARCHITECTURAL, "ran", detail, static_findings)
     )
 
     # Layer 3 — cloud posture (deterministic offline / read-only live).
