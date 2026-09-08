@@ -22,7 +22,9 @@ false positives are worse than a missed edge case for adoption.
 from __future__ import annotations
 
 import ast
+import math
 import re
+from collections import Counter
 from pathlib import Path
 
 from agentaudit.models import (
@@ -444,6 +446,73 @@ def _detect_excessive_agency(tool: ToolDef, file: str) -> Finding | None:
 
 
 # ---------------------------------------------------------------------------
+# Secrets-in-system-prompt (Phase 2 item 2.2)
+# ---------------------------------------------------------------------------
+_AWS_ACCESS_KEY = re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")
+_GENERIC_TOKEN = re.compile(r"[A-Za-z0-9/+=_\-]{32,}")
+_SECRET_KEYWORD = re.compile(r"(key|token|secret|password|passwd|apikey|api_key|credential)", re.IGNORECASE)
+
+
+def _shannon_entropy(s: str) -> float:
+    if not s:
+        return 0.0
+    counts = Counter(s)
+    n = len(s)
+    return -sum((c / n) * math.log2(c / n) for c in counts.values())
+
+
+def detect_prompt_secrets(prompt: str, file: str) -> list[Finding]:
+    """Flag hard-coded credentials embedded in the system prompt.
+
+    Two signals: a precise AWS-key regex, and a generic high-entropy token that
+    sits near a secret-ish keyword (entropy screens out ordinary long words).
+    Deduplicated by the matched value so one secret yields one finding.
+    """
+    if not prompt:
+        return []
+    found: dict[str, str] = {}  # secret value -> kind
+
+    for m in _AWS_ACCESS_KEY.finditer(prompt):
+        found[m.group(0)] = "AWS access key id"
+
+    for m in _GENERIC_TOKEN.finditer(prompt):
+        tok = m.group(0)
+        if tok in found:
+            continue
+        window = prompt[max(0, m.start() - 40): m.end() + 40]
+        if _SECRET_KEYWORD.search(window) and _shannon_entropy(tok) >= 3.5:
+            found[tok] = "high-entropy secret"
+
+    findings: list[Finding] = []
+    for value, kind in found.items():
+        masked = value[:4] + "…" + value[-2:] if len(value) > 8 else "…"
+        findings.append(
+            Finding(
+                detector="secret-in-prompt",
+                layer=Layer.ARCHITECTURAL,
+                severity=Severity.CRITICAL,
+                title=f"Hard-coded {kind} in the system prompt",
+                description=(
+                    f"The system prompt embeds what looks like a {kind} ('{masked}'). "
+                    f"Anything in the prompt is visible to the model and can be leaked "
+                    f"through prompt-extraction attacks; secrets must never live in it."
+                ),
+                file=file,
+                evidence=f"{kind}: {masked} (entropy {_shannon_entropy(value):.2f})",
+                confidence=Confidence.DETERMINISTIC,
+                remediation=Remediation(
+                    summary="Load the secret from the environment / a secrets manager, never the prompt.",
+                    before='SYSTEM_PROMPT = "... use key AKIA...EXAMPLE ..."',
+                    after='key = os.environ["AWS_ACCESS_KEY_ID"]  # never in the prompt',
+                ),
+                fingerprint=f"secret-in-prompt:{file}:{masked}",
+                metadata={"kind": kind},
+            )
+        )
+    return findings
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 def analyze(agent_path: str | Path) -> list[Finding]:
@@ -459,4 +528,6 @@ def analyze(agent_path: str | Path) -> list[Finding]:
             f = detector(tool, file)
             if f is not None:
                 findings.append(f)
+
+    findings.extend(detect_prompt_secrets(extract_system_prompt(tree) or "", file))
     return findings
