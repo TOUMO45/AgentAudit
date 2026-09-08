@@ -9,6 +9,10 @@
 #   ./guard.sh freeze   # after human sign-off: record the trusted hashes
 #   ./guard.sh check    # in CI / before a run: verify nothing was tampered with
 #
+# Hashes are computed over LINE-ENDING-NORMALIZED content (CR stripped) so the
+# baseline is identical on Windows (CRLF) and Linux/CI (LF) — the repo uses
+# `.gitattributes eol=lf`, so a naive byte hash would differ per platform.
+#
 # `check` prints "INTEGRITY OK" when clean, or the exact tampered path and its
 # diff and exits non-zero.
 set -euo pipefail
@@ -29,48 +33,62 @@ agentaudit/layers/supply_chain.py
 EOF
 }
 
-hash_all() {
-  collect_paths | while IFS= read -r p; do
-    [ -f "$p" ] && sha256sum "$p"
+# Normalized hash: strip carriage returns, then sha256 the content.
+norm_hash() {
+  tr -d '\r' < "$1" | sha256sum | cut -d' ' -f1
+}
+
+existing_paths() {
+  collect_paths | while IFS= read -r p; do [ -f "$p" ] && echo "$p"; done | sort
+}
+
+freeze() {
+  : > "$BASELINE"
+  existing_paths | while IFS= read -r p; do
+    echo "$(norm_hash "$p")  $p" >> "$BASELINE"
   done
+  echo "Froze $(wc -l < "$BASELINE" | tr -d ' ') protected paths into $BASELINE"
+}
+
+check() {
+  if [ ! -f "$BASELINE" ]; then
+    echo "NO BASELINE: run './guard.sh freeze' after human sign-off first." >&2
+    exit 2
+  fi
+
+  violation=0
+
+  # 1) added / removed protected paths
+  baseline_paths=$(cut -d' ' -f3- "$BASELINE" | sort)
+  current_paths=$(existing_paths)
+  if ! diff <(echo "$baseline_paths") <(echo "$current_paths") >/dev/null; then
+    violation=1
+    echo "INTEGRITY VIOLATION: protected file set changed" >&2
+    diff <(echo "$baseline_paths") <(echo "$current_paths") | sed 's/^/    /' >&2 || true
+  fi
+
+  # 2) content changes (normalized hash mismatch)
+  while IFS= read -r line; do
+    expected="${line%%  *}"
+    path="${line#*  }"
+    if [ ! -f "$path" ]; then continue; fi
+    actual="$(norm_hash "$path")"
+    if [ "$expected" != "$actual" ]; then
+      violation=1
+      echo "INTEGRITY VIOLATION: content changed -> $path" >&2
+      git diff -- "$path" 2>/dev/null | sed 's/^/    /' >&2 || true
+    fi
+  done < "$BASELINE"
+
+  if [ "$violation" -eq 0 ]; then
+    echo "INTEGRITY OK"
+    exit 0
+  fi
+  exit 1
 }
 
 case "${1:-}" in
-  freeze)
-    hash_all > "$BASELINE"
-    echo "Froze $(wc -l < "$BASELINE") protected paths into $BASELINE"
-    ;;
-  check)
-    if [ ! -f "$BASELINE" ]; then
-      echo "NO BASELINE: run './guard.sh freeze' after human sign-off first." >&2
-      exit 2
-    fi
-    # sha256sum -c reports "<path>: OK|FAILED"; capture failures.
-    if out=$(sha256sum -c "$BASELINE" 2>/dev/null); then
-      # Also detect additions/removals from the protected set.
-      # Extract paths from the baseline (format: "<hash> *<path>").
-      baseline_paths=$(sed 's/^[0-9a-f]\{64\} [ *]//' "$BASELINE" | sort)
-      current_paths=$(collect_paths | while read -r p; do [ -f "$p" ] && echo "$p"; done | sort)
-      if diff <(echo "$baseline_paths") <(echo "$current_paths") >/dev/null; then
-        echo "INTEGRITY OK"
-        exit 0
-      fi
-    fi
-    echo "INTEGRITY VIOLATION" >&2
-    echo "$out" | grep -v ': OK$' || true
-    while IFS= read -r line; do
-      case "$line" in
-        *": FAILED"*)
-          path="${line%: FAILED}"
-          echo "--- tampered: $path" >&2
-          git diff -- "$path" 2>/dev/null | sed 's/^/    /' >&2 || true
-          ;;
-      esac
-    done <<< "$out"
-    exit 1
-    ;;
-  *)
-    echo "usage: ./guard.sh {freeze|check}" >&2
-    exit 2
-    ;;
+  freeze) freeze ;;
+  check) check ;;
+  *) echo "usage: ./guard.sh {freeze|check}" >&2; exit 2 ;;
 esac
