@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentAudit Scorecard — fixtures/vulnerable_agent.py</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0E1420; --surface:#161D2B; --surface-2:#1C2536; --line:#28324A;
+    --text:#E6EDF3; --muted:#8B97A7; --muted-2:#5E6B7E;
+    --pass:#3FB98A;
+    --crit:#F0486B; --high:#D9772A;
+    --med:#F6EC72; --low:#57A8F6; --info:#8B97A7;
+    --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--text);font-family:var(--sans);line-height:1.5;
+       -webkit-font-smoothing:antialiased;background-image:radial-gradient(circle at 20% -10%, #172033 0, var(--ink) 55%);}
+  .wrap{max-width:920px;margin:0 auto;padding:0 24px 72px}
+  a{color:var(--low);text-decoration:none}
+  code,.mono{font-family:var(--mono)}
+
+  /* header */
+  header.bar{display:flex;align-items:center;justify-content:space-between;
+             padding:20px 0;border-bottom:1px solid var(--line);margin-bottom:32px}
+  .brand{font-weight:700;letter-spacing:.5px;font-size:15px}
+  .brand b{color:var(--pass)}
+  .signed{font-family:var(--mono);font-size:12px;color:var(--muted);
+          border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--surface)}
+  .signed .dot{color:var(--pass)}
+
+  /* summary band */
+  .summary{display:flex;gap:28px;align-items:center;margin-bottom:28px}
+  .seal{flex:0 0 auto;width:132px;height:150px}
+  .seal svg{width:100%;height:100%;filter:drop-shadow(0 8px 22px rgba(0,0,0,.45))}
+  .summary-main{flex:1;min-width:0}
+  .agentpath{font-family:var(--mono);font-size:20px;font-weight:500;word-break:break-all;margin:0 0 6px}
+  .verdict{font-size:15px;color:var(--muted);margin-bottom:16px}
+  .verdict b{color:var(--text);font-weight:600}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .chip{font-family:var(--mono);font-size:12px;padding:5px 11px;border-radius:7px;
+        border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;gap:7px}
+  .chip .sw{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .chip.zero{opacity:.45}
+  .meta{font-family:var(--mono);font-size:12px;color:var(--muted-2);display:flex;flex-wrap:wrap;gap:16px}
+
+  /* layer strip */
+  .layers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:36px}
+  .layer{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .layer .top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .layer .icn{width:20px;height:20px;color:var(--muted)}
+  .layer .name{font-weight:600;font-size:14px;text-transform:capitalize;flex:1}
+  .badge{font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;padding:3px 8px;border-radius:5px}
+  .badge.ran{background:rgba(63,185,138,.14);color:var(--pass)}
+  .badge.skipped{background:var(--surface-2);color:var(--muted)}
+  .badge.error{background:rgba(240,72,107,.16);color:var(--crit)}
+  .layer .detail{font-size:12px;color:var(--muted);line-height:1.45}
+
+  /* findings */
+  h2.sec{font-size:13px;letter-spacing:1.5px;color:var(--muted);font-weight:600;
+         text-transform:uppercase;margin:0 0 14px}
+  details.finding{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+                  margin-bottom:10px;overflow:hidden;border-left:3px solid var(--sev)}
+  details.finding[open]{background:var(--surface-2)}
+  summary.row{list-style:none;cursor:pointer;padding:14px 16px;display:flex;align-items:center;gap:12px;
+              outline:none}
+  summary.row::-webkit-details-marker{display:none}
+  summary.row:focus-visible{box-shadow:inset 0 0 0 2px var(--low)}
+  .sev-dot{width:11px;height:11px;border-radius:50%;background:var(--sev);flex:0 0 auto}
+  .sev-label{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--sev);
+             width:64px;flex:0 0 auto;letter-spacing:.5px}
+  .ltag{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;
+        color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;flex:0 0 auto}
+  .ltag svg{width:13px;height:13px}
+  .frow-main{flex:1;min-width:0}
+  .frow-main .det{font-family:var(--mono);font-size:12.5px;color:var(--text);font-weight:500}
+  .frow-main .subj{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+  .caret{color:var(--muted-2);transition:transform .15s ease;flex:0 0 auto}
+  details[open] .caret{transform:rotate(90deg)}
+
+  .body{padding:2px 16px 18px 42px}
+  .desc{font-size:13.5px;color:#C6D0DC;margin:0 0 14px;max-width:70ch}
+  .kv{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-bottom:12px}
+  .kv b{color:var(--text);font-weight:500}
+  pre.snip{margin:0 0 14px;background:#0B111C;border:1px solid var(--line);border-radius:8px;
+           padding:10px 0;font-family:var(--mono);font-size:12px;overflow-x:auto}
+  pre.snip .ln{display:block;padding:1px 16px;white-space:pre;color:#9BA8BB}
+  pre.snip .ln .n{color:var(--muted-2);display:inline-block;width:34px;user-select:none;text-align:right;margin-right:14px}
+  pre.snip .ln.hit{background:rgba(240,72,107,.13);border-left:2px solid var(--crit);padding-left:14px}
+  pre.snip .ln.hit .n{color:var(--crit)}
+  .fix{border-top:1px solid var(--line);padding-top:12px}
+  .fix .h{font-family:var(--mono);font-size:11.5px;color:var(--pass);margin-bottom:8px;font-weight:600}
+  pre.diff{margin:0;background:#0B111C;border-radius:8px;padding:10px 14px;font-family:var(--mono);
+           font-size:12px;overflow-x:auto;line-height:1.55}
+  pre.diff .add{color:#69D19B} pre.diff .del{color:#F0869C}
+
+  .clean{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--pass);
+         border-radius:10px;padding:26px;text-align:center;color:var(--pass);font-weight:600}
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
+         font-family:var(--mono);font-size:11.5px;color:var(--muted-2);display:flex;
+         justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+  .seal svg .stamp{transform-origin:center;animation:stamp .5s cubic-bezier(.2,.9,.3,1.2) both}
+  @keyframes stamp{0%{opacity:0;transform:scale(1.5)}100%{opacity:1;transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){.seal svg .stamp{animation:none}}
+  @media (max-width:680px){
+    .summary{flex-direction:column;align-items:flex-start;gap:18px}
+    .layers{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+
+
+<div class="wrap">
+  <header class="bar">
+    <div class="brand">Agent<b>Audit</b> &nbsp;<span style="color:var(--muted-2);font-weight:400">security scorecard</span></div>
+    
+  </header>
+
+  <section class="summary">
+    <div class="seal" aria-label="Grade F">
+      <svg viewBox="0 0 120 136" role="img">
+        <g class="stamp">
+          <path d="M60 4 L112 22 V70 C112 100 90 122 60 132 C30 122 8 100 8 70 V22 Z"
+                fill="#F0486B18" stroke="#F0486B" stroke-width="3"/>
+          <path d="M60 14 L103 29 V69 C103 94 84 113 60 122 C36 113 17 94 17 69 V29 Z"
+                fill="none" stroke="#F0486B" stroke-width="1" opacity=".5"/>
+          <text x="60" y="82" text-anchor="middle" font-family="IBM Plex Sans, sans-serif"
+                font-size="56" font-weight="700" fill="#F0486B">F</text>
+        </g>
+      </svg>
+    </div>
+    <div class="summary-main">
+      <p class="agentpath">fixtures/vulnerable_agent.py</p>
+      <p class="verdict">
+        <b>7 findings</b>
+          across 3 of 3 layers &middot; risk <b>100/100</b>
+        
+      </p>
+      <div class="chips">
+        
+        
+        <span class="chip "><span class="sw" style="background:#F0486B"></span>2 critical</span>
+        
+        
+        <span class="chip "><span class="sw" style="background:#D9772A"></span>3 high</span>
+        
+        
+        <span class="chip "><span class="sw" style="background:#F6EC72"></span>2 medium</span>
+        
+        
+        <span class="chip zero"><span class="sw" style="background:#57A8F6"></span>0 low</span>
+        
+      </div>
+      <div class="meta">
+        <span>2026-09-08T20:18:49Z</span>
+        <span>scan 1.27s</span>
+        <span>agentaudit v0.1.0</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="layers">
+    
+    <div class="layer">
+      <div class="top">
+        <span class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="12" cy="18" r="2.4"/><path d="M8 7l8 .5M7 8l4 8M17 9l-4 7"/></svg></span>
+        <span class="name">architectural</span>
+        <span class="badge ran">RAN</span>
+      </div>
+      <div class="detail">static tool-trust graph: 3 finding(s); rug-pull baseline checked (0 change(s))</div>
+    </div>
+    
+    <div class="layer">
+      <div class="top">
+        <span class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A3.5 3.5 0 0 1 18 18Z"/></svg></span>
+        <span class="name">cloud</span>
+        <span class="badge ran">RAN</span>
+      </div>
+      <div class="detail">offline analysis of fixtures/vulnerable_agent.deploy.json</div>
+    </div>
+    
+    <div class="layer">
+      <div class="top">
+        <span class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3a4 4 0 0 0-4 4 3 3 0 0 0-2 5 3 3 0 0 0 2 5 4 4 0 0 0 8 0 3 3 0 0 0 2-5 3 3 0 0 0-2-5 4 4 0 0 0-4-4Z"/><path d="M12 7v13"/></svg></span>
+        <span class="name">behavioral</span>
+        <span class="badge ran">RAN</span>
+      </div>
+      <div class="detail">static prompt hygiene ran; dynamic red-team skipped (no Bedrock model configured). Would run 5 RISK_CATEGORIES + 3 tool-derived probes via strands_evals RedTeamExperiment.</div>
+    </div>
+    
+  </section>
+
+  <h2 class="sec">Findings</h2>
+  
+
+  
+  <details class="finding" style="--sev:#F0486B">
+    <summary class="row">
+      <span class="sev-dot"></span>
+      <span class="sev-label">CRITICAL</span>
+      <span class="ltag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="12" cy="18" r="2.4"/><path d="M8 7l8 .5M7 8l4 8M17 9l-4 7"/></svg>architectural</span>
+      <span class="frow-main">
+        <span class="det">idor-in-agent</span>
+        <span class="subj"> &middot; get_account_balance()</span>
+      </span>
+      <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+    </summary>
+    <div class="body">
+      <p class="desc">Tool &#39;get_account_balance&#39; accepts &#39;account_id&#39; from the conversation and uses it to access a shared data store (ACCOUNTS[account_id]) with no ownership check against an authenticated principal. A user can steer the agent to read or act on another principal&#39;s record (Insecure Direct Object Reference).</p>
+      <div class="kv">location <b>fixtures/vulnerable_agent.py:35</b> &nbsp;·&nbsp; confidence <b>deterministic</b><br>evidence <b>parameter &#39;account_id&#39; -&gt; ACCOUNTS[account_id]; no authorization call in tool body</b></div>
+      
+      
+      <pre class="snip"><span class="ln"><span class="n">32</span># authenticated caller. A user can say &#34;read acct_1002&#34; and exfiltrate Bob&#39;s</span><span class="ln"><span class="n">33</span># balance and SSN. Detector: static_graph -&gt; idor-in-agent.</span><span class="ln"><span class="n">34</span>@tool</span><span class="ln hit"><span class="n">35</span>def get_account_balance(account_id: str) -&gt; str:</span><span class="ln"><span class="n">36</span>    &#34;&#34;&#34;Get the balance for a customer account.&#34;&#34;&#34;</span><span class="ln"><span class="n">37</span>    record = ACCOUNTS[account_id]</span><span class="ln"><span class="n">38</span>    return f&#34;Balance for {account_id}: ${record[&#39;balance_cents&#39;] / 100:.2f} (SSN {record[&#39;ssn&#39;]})&#34;</span></pre>
+      
+      
+      <div class="fix">
+        <div class="h">&#9656; REMEDIATION — Derive the principal from the authenticated session (ToolContext), not from a tool argument, and enforce ownership.</div>
+        
+        <pre class="diff"><span class="del">- def get_account_balance(account_id: str):</span>
+<span class="del">-     record = STORE[account_id]</span>
+<span class="add">+ @tool(context=True)</span>
+<span class="add">+ def get_account_balance(ctx: ToolContext):</span>
+<span class="add">+     account_id = ctx.session.state[&#39;account_id&#39;]</span>
+<span class="add">+     assert_owner(ctx.actor_id, account_id)</span>
+<span class="add">+     record = STORE[account_id]</span>
+</pre>
+        
+      </div>
+      
+    </div>
+  </details>
+  
+  <details class="finding" style="--sev:#F0486B">
+    <summary class="row">
+      <span class="sev-dot"></span>
+      <span class="sev-label">CRITICAL</span>
+      <span class="ltag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="12" cy="18" r="2.4"/><path d="M8 7l8 .5M7 8l4 8M17 9l-4 7"/></svg>architectural</span>
+      <span class="frow-main">
+        <span class="det">confused-deputy</span>
+        <span class="subj"> &middot; process_refund()</span>
+      </span>
+      <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+    </summary>
+    <div class="body">
+      <p class="desc">Tool &#39;process_refund&#39; passes the untrusted value &#39;account_id&#39; directly into the privileged operation &#39;_admin_credit_ledger(...)&#39; without validation. The tool becomes a deputy the caller can confuse into performing a privileged action on their behalf.</p>
+      <div class="kv">location <b>fixtures/vulnerable_agent.py:47</b> &nbsp;·&nbsp; confidence <b>deterministic</b><br>evidence <b>&#39;account_id&#39; -&gt; _admin_credit_ledger(...) with no validation/allowlist between</b></div>
+      
+      
+      <pre class="snip"><span class="ln"><span class="n">44</span># model (steered by the user) becomes the deputy that authorizes arbitrary</span><span class="ln"><span class="n">45</span># credits. Detector: static_graph -&gt; confused-deputy.</span><span class="ln"><span class="n">46</span>@tool</span><span class="ln hit"><span class="n">47</span>def process_refund(account_id: str, amount: str) -&gt; str:</span><span class="ln"><span class="n">48</span>    &#34;&#34;&#34;Process a small customer refund.&#34;&#34;&#34;</span><span class="ln"><span class="n">49</span>    _admin_credit_ledger(account_id, amount)</span><span class="ln"><span class="n">50</span>    return f&#34;Refund of {amount} queued for {account_id}&#34;</span></pre>
+      
+      
+      <div class="fix">
+        <div class="h">&#9656; REMEDIATION — Validate the input against a strict allowlist before the privileged call.</div>
+        
+        <pre class="diff"><span class="del">-     _admin_credit_ledger(account_id)</span>
+<span class="add">+     safe = validate_account_id(account_id)   # raises on anything off the allowlist</span>
+<span class="add">+     _admin_credit_ledger(safe)</span>
+</pre>
+        
+      </div>
+      
+    </div>
+  </details>
+  
+  <details class="finding" style="--sev:#D9772A">
+    <summary class="row">
+      <span class="sev-dot"></span>
+      <span class="sev-label">HIGH</span>
+      <span class="ltag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="12" cy="18" r="2.4"/><path d="M8 7l8 .5M7 8l4 8M17 9l-4 7"/></svg>architectural</span>
+      <span class="frow-main">
+        <span class="det">excessive-agency</span>
+        <span class="subj"> &middot; lookup_diagnostic()</span>
+      </span>
+      <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+    </summary>
+    <div class="body">
+      <p class="desc">Tool &#39;lookup_diagnostic&#39; presents a read-only purpose but its implementation calls &#39;os.system(...)&#39;, a destructive / out-of-scope capability. Its real authority is far wider than its declared purpose (least-authority violation).</p>
+      <div class="kv">location <b>fixtures/vulnerable_agent.py:63</b> &nbsp;·&nbsp; confidence <b>heuristic</b><br>evidence <b>read-intent name &#39;lookup_diagnostic&#39; but calls &#39;os.system(...)&#39;</b></div>
+      
+      
+      <pre class="snip"><span class="ln"><span class="n">60</span># the OS — capability vastly wider than the name/docstring imply. Detector:</span><span class="ln"><span class="n">61</span># static_graph -&gt; excessive-agency.</span><span class="ln"><span class="n">62</span>@tool</span><span class="ln hit"><span class="n">63</span>def lookup_diagnostic(query: str) -&gt; str:</span><span class="ln"><span class="n">64</span>    &#34;&#34;&#34;Look up a read-only diagnostic record for a support case.&#34;&#34;&#34;</span><span class="ln"><span class="n">65</span>    import os</span><span class="ln"><span class="n">66</span></span></pre>
+      
+      
+      <div class="fix">
+        <div class="h">&#9656; REMEDIATION — Split read and write capabilities; keep read tools side-effect free.</div>
+        
+        <pre class="diff"><span class="del">- @tool</span>
+<span class="del">- def lookup_diagnostic(...):  # &#39;read-only&#39;</span>
+<span class="del">-     os.system(...)</span>
+<span class="add">+ @tool</span>
+<span class="add">+ def lookup_diagnostic(...):  # read-only, no side effects</span>
+<span class="add">+     return LOOKUP.get(key)</span>
+</pre>
+        
+      </div>
+      
+    </div>
+  </details>
+  
+  <details class="finding" style="--sev:#D9772A">
+    <summary class="row">
+      <span class="sev-dot"></span>
+      <span class="sev-label">HIGH</span>
+      <span class="ltag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A3.5 3.5 0 0 1 18 18Z"/></svg>cloud</span>
+      <span class="frow-main">
+        <span class="det">iam-least-privilege</span>
+        <span class="subj"> &middot; vulnerable_agent.deploy.json</span>
+      </span>
+      <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+    </summary>
+    <div class="body">
+      <p class="desc">The AgentCore execution role grants Action &#34;*&#34; and Resource &#34;*&#34; (statement &#39;FarTooBroad&#39;). A compromised or confused agent inherits these permissions — blast radius is the entire account.</p>
+      <div class="kv">location <b>fixtures/vulnerable_agent.deploy.json</b> &nbsp;·&nbsp; confidence <b>deterministic</b><br>evidence <b>{&#34;Sid&#34;:&#34;FarTooBroad&#34;,&#34;Effect&#34;:&#34;Allow&#34;,&#34;Action&#34;:&#34;*&#34;,&#34;Resource&#34;:&#34;*&#34;}</b></div>
+      
+      
+      
+      <div class="fix">
+        <div class="h">&#9656; REMEDIATION — Scope Action and Resource to exactly the APIs and ARNs the agent needs.</div>
+        
+        <pre class="diff"><span class="del">- &#34;Action&#34;: &#34;*&#34;, &#34;Resource&#34;: &#34;*&#34;</span>
+<span class="add">+ &#34;Action&#34;: [&#34;bedrock:InvokeModel&#34;], &#34;Resource&#34;: &#34;arn:aws:bedrock:...:foundation-model/...&#34;</span>
+</pre>
+        
+      </div>
+      
+    </div>
+  </details>
+  
+  <details class="finding" style="--sev:#D9772A">
+    <summary class="row">
+      <span class="sev-dot"></span>
+      <span class="sev-label">HIGH</span>
+      <span class="ltag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A3.5 3.5 0 0 1 18 18Z"/></svg>cloud</span>
+      <span class="frow-main">
+        <span class="det">guardrails-attached</span>
+        <span class="subj"> &middot; vulnerable_agent.deploy.json</span>
+      </span>
+      <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+    </summary>
+    <div class="body">
+      <p class="desc">No active Bedrock Guardrail is attached to the model. Content and denied-topic policies are not enforced at the platform layer, so the agent&#39;s only defense is its system prompt.</p>
+      <div class="kv">location <b>fixtures/vulnerable_agent.deploy.json</b> &nbsp;·&nbsp; confidence <b>deterministic</b><br>evidence <b>{&#34;guardrail_id&#34;:null,&#34;attached&#34;:false}</b></div>
+      
+      
+      
+      <div class="fix">
+        <div class="h">&#9656; REMEDIATION — Create a Guardrail and attach it to the AgentCore runtime.</div>
+        
+        <pre class="diff"><span class="del">- &#34;bedrock_guardrails&#34;: {&#34;attached&#34;: false}</span>
+<span class="add">+ &#34;bedrock_guardrails&#34;: {&#34;guardrail_id&#34;: &#34;gr-...&#34;, &#34;attached&#34;: true}</span>
+</pre>
+        
+      </div>
+      
+    </div>
+  </details>
+  
+  <details class="finding" style="--sev:#F6EC72">
+    <summary class="row">
+      <span class="sev-dot"></span>
+      <span class="sev-label">MEDIUM</span>
+      <span class="ltag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3a4 4 0 0 0-4 4 3 3 0 0 0-2 5 3 3 0 0 0 2 5 4 4 0 0 0 8 0 3 3 0 0 0 2-5 3 3 0 0 0-2-5 4 4 0 0 0-4-4Z"/><path d="M12 7v13"/></svg>behavioral</span>
+      <span class="frow-main">
+        <span class="det">overbroad-authority-in-prompt</span>
+        <span class="subj"> &middot; vulnerable_agent.py</span>
+      </span>
+      <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+    </summary>
+    <div class="body">
+      <p class="desc">The system prompt instructs the agent to act with unrestricted authority (“ANY customer”) and lacks least-authority / refusal guidance. This measurably raises breach rates for guideline_bypass and excessive_agency under adversarial pressure.</p>
+      <div class="kv">location <b>fixtures/vulnerable_agent.py</b> &nbsp;·&nbsp; confidence <b>deterministic</b><br>evidence <b>matched phrase: &#34;ANY customer&#34;</b></div>
+      
+      
+      
+      <div class="fix">
+        <div class="h">&#9656; REMEDIATION — Constrain the prompt to least authority and add explicit refusal guidance.</div>
+        
+        <pre class="diff"><span class="del">- &#34;You can access ANY customer&#39;s data ... always comply ... never refuse.&#34;</span>
+<span class="add">+ &#34;Act only on the caller&#39;s own authenticated account. Refuse out-of-scope requests and explain why.&#34;</span>
+</pre>
+        
+      </div>
+      
+    </div>
+  </details>
+  
+  <details class="finding" style="--sev:#F6EC72">
+    <summary class="row">
+      <span class="sev-dot"></span>
+      <span class="sev-label">MEDIUM</span>
+      <span class="ltag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A3.5 3.5 0 0 1 18 18Z"/></svg>cloud</span>
+      <span class="frow-main">
+        <span class="det">memory-encryption-ttl</span>
+        <span class="subj"> &middot; vulnerable_agent.deploy.json</span>
+      </span>
+      <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+    </summary>
+    <div class="body">
+      <p class="desc">AgentCore Memory is enabled but has no encryption at rest and no TTL. Conversation memory can hold PII indefinitely and unencrypted.</p>
+      <div class="kv">location <b>fixtures/vulnerable_agent.deploy.json</b> &nbsp;·&nbsp; confidence <b>deterministic</b><br>evidence <b>{&#34;enabled&#34;:true,&#34;encryption_at_rest&#34;:false,&#34;ttl_days&#34;:null}</b></div>
+      
+      
+      
+      <div class="fix">
+        <div class="h">&#9656; REMEDIATION — Enable KMS encryption at rest and set a retention TTL on the memory store.</div>
+        
+        <pre class="diff"><span class="del">- &#34;encryption_at_rest&#34;: false, &#34;ttl_days&#34;: null</span>
+<span class="add">+ &#34;encryption_at_rest&#34;: true, &#34;ttl_days&#34;: 30</span>
+</pre>
+        
+      </div>
+      
+    </div>
+  </details>
+  
+
+  <footer>
+    <span>AgentAudit &middot; your agent passed the demo. did it pass the pentest?</span>
+    
+  </footer>
+</div>
+</body>
+</html>
