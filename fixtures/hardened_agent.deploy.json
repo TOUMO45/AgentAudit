@@ -1,0 +1,40 @@
+{
+  "$comment": "Ground-truth AgentCore deployment posture for the HARDENED fixture. Least-privilege, guardrails attached, memory encrypted with a TTL. Must yield 0 cloud findings.",
+  "agent_name": "northwind-support-hardened",
+  "region": "us-east-1",
+  "execution_role": {
+    "role_name": "northwind-support-exec",
+    "policy": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "ScopedInvoke",
+          "Effect": "Allow",
+          "Action": [
+            "bedrock:InvokeModel",
+            "bedrock:InvokeModelWithResponseStream"
+          ],
+          "Resource": "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-5"
+        },
+        {
+          "Sid": "ScopedMemory",
+          "Effect": "Allow",
+          "Action": [
+            "bedrock-agentcore:GetMemoryRecord",
+            "bedrock-agentcore:PutMemoryRecord"
+          ],
+          "Resource": "arn:aws:bedrock-agentcore:us-east-1:123456789012:memory/northwind-support"
+        }
+      ]
+    }
+  },
+  "bedrock_guardrails": {
+    "guardrail_id": "gr-abc123",
+    "attached": true
+  },
+  "agentcore_memory": {
+    "enabled": true,
+    "encryption_at_rest": true,
+    "ttl_days": 30
+  }
+}

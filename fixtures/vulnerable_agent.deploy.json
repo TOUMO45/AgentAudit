@@ -1,0 +1,28 @@
+{
+  "$comment": "Ground-truth AgentCore deployment posture for the VULNERABLE fixture. Auto-discovered by the cloud-posture layer as <agent_stem>.deploy.json. Planted flaws enumerated in MANIFEST.md.",
+  "agent_name": "northwind-support-vulnerable",
+  "region": "us-east-1",
+  "execution_role": {
+    "role_name": "northwind-support-exec",
+    "policy": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "FarTooBroad",
+          "Effect": "Allow",
+          "Action": "*",
+          "Resource": "*"
+        }
+      ]
+    }
+  },
+  "bedrock_guardrails": {
+    "guardrail_id": null,
+    "attached": false
+  },
+  "agentcore_memory": {
+    "enabled": true,
+    "encryption_at_rest": false,
+    "ttl_days": null
+  }
+}

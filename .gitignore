@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# AgentAudit run outputs
+out/
+*.sarif
+scorecard.html
+report.signed.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Secrets — never commit AWS credentials
+.env
+*.pem
+aws-credentials*
