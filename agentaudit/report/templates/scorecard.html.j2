@@ -4,108 +4,220 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AgentAudit Scorecard — {{ card.agent_path }}</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body { background:#0b1120; color:#e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .card { background:#111827; border:1px solid #1f2937; }
-  .diff-add { color:#4ade80; } .diff-del { color:#f87171; }
-  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  :root{
+    --ink:#0E1420; --surface:#161D2B; --surface-2:#1C2536; --line:#28324A;
+    --text:#E6EDF3; --muted:#8B97A7; --muted-2:#5E6B7E;
+    --pass:{{ grade_color['A'] }};
+    --crit:{{ sev_color['critical'] }}; --high:{{ sev_color['high'] }};
+    --med:{{ sev_color['medium'] }}; --low:{{ sev_color['low'] }}; --info:{{ sev_color['info'] }};
+    --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--text);font-family:var(--sans);line-height:1.5;
+       -webkit-font-smoothing:antialiased;background-image:radial-gradient(circle at 20% -10%, #172033 0, var(--ink) 55%);}
+  .wrap{max-width:920px;margin:0 auto;padding:0 24px 72px}
+  a{color:var(--low);text-decoration:none}
+  code,.mono{font-family:var(--mono)}
+
+  /* header */
+  header.bar{display:flex;align-items:center;justify-content:space-between;
+             padding:20px 0;border-bottom:1px solid var(--line);margin-bottom:32px}
+  .brand{font-weight:700;letter-spacing:.5px;font-size:15px}
+  .brand b{color:var(--pass)}
+  .signed{font-family:var(--mono);font-size:12px;color:var(--muted);
+          border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--surface)}
+  .signed .dot{color:var(--pass)}
+
+  /* summary band */
+  .summary{display:flex;gap:28px;align-items:center;margin-bottom:28px}
+  .seal{flex:0 0 auto;width:132px;height:150px}
+  .seal svg{width:100%;height:100%;filter:drop-shadow(0 8px 22px rgba(0,0,0,.45))}
+  .summary-main{flex:1;min-width:0}
+  .agentpath{font-family:var(--mono);font-size:20px;font-weight:500;word-break:break-all;margin:0 0 6px}
+  .verdict{font-size:15px;color:var(--muted);margin-bottom:16px}
+  .verdict b{color:var(--text);font-weight:600}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .chip{font-family:var(--mono);font-size:12px;padding:5px 11px;border-radius:7px;
+        border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;gap:7px}
+  .chip .sw{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .chip.zero{opacity:.45}
+  .meta{font-family:var(--mono);font-size:12px;color:var(--muted-2);display:flex;flex-wrap:wrap;gap:16px}
+
+  /* layer strip */
+  .layers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:36px}
+  .layer{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .layer .top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .layer .icn{width:20px;height:20px;color:var(--muted)}
+  .layer .name{font-weight:600;font-size:14px;text-transform:capitalize;flex:1}
+  .badge{font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;padding:3px 8px;border-radius:5px}
+  .badge.ran{background:rgba(63,185,138,.14);color:var(--pass)}
+  .badge.skipped{background:var(--surface-2);color:var(--muted)}
+  .badge.error{background:rgba(240,72,107,.16);color:var(--crit)}
+  .layer .detail{font-size:12px;color:var(--muted);line-height:1.45}
+
+  /* findings */
+  h2.sec{font-size:13px;letter-spacing:1.5px;color:var(--muted);font-weight:600;
+         text-transform:uppercase;margin:0 0 14px}
+  details.finding{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+                  margin-bottom:10px;overflow:hidden;border-left:3px solid var(--sev)}
+  details.finding[open]{background:var(--surface-2)}
+  summary.row{list-style:none;cursor:pointer;padding:14px 16px;display:flex;align-items:center;gap:12px;
+              outline:none}
+  summary.row::-webkit-details-marker{display:none}
+  summary.row:focus-visible{box-shadow:inset 0 0 0 2px var(--low)}
+  .sev-dot{width:11px;height:11px;border-radius:50%;background:var(--sev);flex:0 0 auto}
+  .sev-label{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--sev);
+             width:64px;flex:0 0 auto;letter-spacing:.5px}
+  .ltag{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;
+        color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;flex:0 0 auto}
+  .ltag svg{width:13px;height:13px}
+  .frow-main{flex:1;min-width:0}
+  .frow-main .det{font-family:var(--mono);font-size:12.5px;color:var(--text);font-weight:500}
+  .frow-main .subj{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+  .caret{color:var(--muted-2);transition:transform .15s ease;flex:0 0 auto}
+  details[open] .caret{transform:rotate(90deg)}
+
+  .body{padding:2px 16px 18px 42px}
+  .desc{font-size:13.5px;color:#C6D0DC;margin:0 0 14px;max-width:70ch}
+  .kv{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-bottom:12px}
+  .kv b{color:var(--text);font-weight:500}
+  pre.snip{margin:0 0 14px;background:#0B111C;border:1px solid var(--line);border-radius:8px;
+           padding:10px 0;font-family:var(--mono);font-size:12px;overflow-x:auto}
+  pre.snip .ln{display:block;padding:1px 16px;white-space:pre;color:#9BA8BB}
+  pre.snip .ln .n{color:var(--muted-2);display:inline-block;width:34px;user-select:none;text-align:right;margin-right:14px}
+  pre.snip .ln.hit{background:rgba(240,72,107,.13);border-left:2px solid var(--crit);padding-left:14px}
+  pre.snip .ln.hit .n{color:var(--crit)}
+  .fix{border-top:1px solid var(--line);padding-top:12px}
+  .fix .h{font-family:var(--mono);font-size:11.5px;color:var(--pass);margin-bottom:8px;font-weight:600}
+  pre.diff{margin:0;background:#0B111C;border-radius:8px;padding:10px 14px;font-family:var(--mono);
+           font-size:12px;overflow-x:auto;line-height:1.55}
+  pre.diff .add{color:#69D19B} pre.diff .del{color:#F0869C}
+
+  .clean{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--pass);
+         border-radius:10px;padding:26px;text-align:center;color:var(--pass);font-weight:600}
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
+         font-family:var(--mono);font-size:11.5px;color:var(--muted-2);display:flex;
+         justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+  .seal svg .stamp{transform-origin:center;animation:stamp .5s cubic-bezier(.2,.9,.3,1.2) both}
+  @keyframes stamp{0%{opacity:0;transform:scale(1.5)}100%{opacity:1;transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){.seal svg .stamp{animation:none}}
+  @media (max-width:680px){
+    .summary{flex-direction:column;align-items:flex-start;gap:18px}
+    .layers{grid-template-columns:1fr}
+  }
 </style>
 </head>
-<body class="min-h-screen">
-<div class="max-w-5xl mx-auto p-6">
+<body>
+{% set sev_rank = {'critical':4,'high':3,'medium':2,'low':1,'info':0} %}
+{% macro layer_icon(layer) -%}
+  {%- if layer == 'behavioral' -%}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3a4 4 0 0 0-4 4 3 3 0 0 0-2 5 3 3 0 0 0 2 5 4 4 0 0 0 8 0 3 3 0 0 0 2-5 3 3 0 0 0-2-5 4 4 0 0 0-4-4Z"/><path d="M12 7v13"/></svg>
+  {%- elif layer == 'architectural' -%}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="12" cy="18" r="2.4"/><path d="M8 7l8 .5M7 8l4 8M17 9l-4 7"/></svg>
+  {%- else -%}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A3.5 3.5 0 0 1 18 18Z"/></svg>
+  {%- endif -%}
+{%- endmacro %}
 
-  <!-- Header -->
-  <header class="flex items-center justify-between mb-8 pb-6 border-b border-gray-800">
-    <div>
-      <div class="text-sm tracking-widest text-emerald-400">AGENTAUDIT · SECURITY SCORECARD</div>
-      <h1 class="text-2xl font-bold mt-1 break-all">{{ card.agent_path }}</h1>
-      <div class="text-gray-400 text-sm mt-1">
-        {{ card.generated_at }} · v{{ card.tool_version }} ·
-        {{ card.findings|length }} finding(s) across {{ card.layers_with_findings() }} layer(s)
-      </div>
-    </div>
-    <div class="text-center">
-      <div class="rounded-2xl w-28 h-28 flex items-center justify-center"
-           style="background:{{ grade_color[card.grade] }}20; border:3px solid {{ grade_color[card.grade] }}">
-        <span class="text-6xl font-black" style="color:{{ grade_color[card.grade] }}">{{ card.grade }}</span>
-      </div>
-      <div class="mt-2 text-sm text-gray-400">risk {{ card.score }}/100</div>
-    </div>
+<div class="wrap">
+  <header class="bar">
+    <div class="brand">Agent<b>Audit</b> &nbsp;<span style="color:var(--muted-2);font-weight:400">security scorecard</span></div>
+    {% if card.signature %}<div class="signed"><span class="dot">&#9679;</span> signed &nbsp;<span class="mono">{{ card.signature.hmac[:12] }}&hellip;</span></div>{% endif %}
   </header>
 
-  <!-- Severity summary -->
-  <section class="grid grid-cols-5 gap-3 mb-6">
-    {% for sev, n in card.counts_by_severity().items() %}
-    <div class="card rounded-xl p-3 text-center">
-      <div class="text-2xl font-bold" style="color:{{ sev_color[sev] }}">{{ n }}</div>
-      <div class="text-xs uppercase tracking-wider text-gray-400">{{ sev }}</div>
+  <section class="summary">
+    <div class="seal" aria-label="Grade {{ card.grade }}">
+      <svg viewBox="0 0 120 136" role="img">
+        <g class="stamp">
+          <path d="M60 4 L112 22 V70 C112 100 90 122 60 132 C30 122 8 100 8 70 V22 Z"
+                fill="{{ grade_color[card.grade] }}18" stroke="{{ grade_color[card.grade] }}" stroke-width="3"/>
+          <path d="M60 14 L103 29 V69 C103 94 84 113 60 122 C36 113 17 94 17 69 V29 Z"
+                fill="none" stroke="{{ grade_color[card.grade] }}" stroke-width="1" opacity=".5"/>
+          <text x="60" y="82" text-anchor="middle" font-family="IBM Plex Sans, sans-serif"
+                font-size="56" font-weight="700" fill="{{ grade_color[card.grade] }}">{{ card.grade }}</text>
+        </g>
+      </svg>
+    </div>
+    <div class="summary-main">
+      <p class="agentpath">{{ card.agent_path }}</p>
+      <p class="verdict">
+        {% if card.findings %}<b>{{ card.findings|length }} finding{{ 's' if card.findings|length != 1 }}</b>
+          across {{ card.layers_with_findings() }} of 3 layers &middot; risk <b>{{ card.score }}/100</b>
+        {% else %}<b>No findings.</b> This agent passed every enabled check.{% endif %}
+      </p>
+      <div class="chips">
+        {% for sev in ['critical','high','medium','low'] %}
+        {% set n = card.counts_by_severity()[sev] %}
+        <span class="chip {{ 'zero' if n == 0 }}"><span class="sw" style="background:{{ sev_color[sev] }}"></span>{{ n }} {{ sev }}</span>
+        {% endfor %}
+      </div>
+      <div class="meta">
+        <span>{{ card.generated_at }}</span>
+        <span>scan {{ '%.2f'|format(card.duration_ms/1000) }}s</span>
+        <span>agentaudit v{{ card.tool_version }}</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="layers">
+    {% for lr in card.layer_reports %}
+    <div class="layer">
+      <div class="top">
+        <span class="icn">{{ layer_icon(lr.layer.value) }}</span>
+        <span class="name">{{ lr.layer.value }}</span>
+        <span class="badge {{ lr.status }}">{{ lr.status|upper }}</span>
+      </div>
+      <div class="detail">{{ lr.detail }}</div>
     </div>
     {% endfor %}
   </section>
 
-  <!-- Layer status -->
-  <section class="grid grid-cols-3 gap-3 mb-8">
-    {% for lr in card.layer_reports %}
-    <div class="card rounded-xl p-4">
-      <div class="flex items-center justify-between">
-        <span class="font-semibold capitalize">{{ lr.layer.value }}</span>
-        {% if lr.status == 'ran' %}
-          <span class="text-xs px-2 py-0.5 rounded bg-emerald-900 text-emerald-300">RAN</span>
-        {% elif lr.status == 'skipped' %}
-          <span class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">SKIPPED</span>
-        {% else %}
-          <span class="text-xs px-2 py-0.5 rounded bg-red-900 text-red-300">ERROR</span>
+  <h2 class="sec">Findings</h2>
+  {% if not card.findings %}
+    <div class="clean">&#10003;&nbsp; Clean — nothing to remediate.</div>
+  {% endif %}
+
+  {% for f in card.findings %}
+  <details class="finding" style="--sev:{{ sev_color[f.severity.value] }}">
+    <summary class="row">
+      <span class="sev-dot"></span>
+      <span class="sev-label">{{ f.severity.value|upper }}</span>
+      <span class="ltag">{{ layer_icon(f.layer.value) }}{{ f.layer.value }}</span>
+      <span class="frow-main">
+        <span class="det">{{ f.detector }}</span>
+        <span class="subj"> &middot; {{ subject(f) }}</span>
+      </span>
+      <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+    </summary>
+    <div class="body">
+      <p class="desc">{{ f.description }}</p>
+      <div class="kv">location <b>{{ f.location }}</b>{% if f.confidence %} &nbsp;·&nbsp; confidence <b>{{ f.confidence.value }}</b>{% endif %}{% if f.evidence %}<br>evidence <b>{{ f.evidence }}</b>{% endif %}</div>
+      {% set snip = snippet(f.file, f.line) %}
+      {% if snip %}
+      <pre class="snip">{% for l in snip %}<span class="ln{{ ' hit' if l.hit }}"><span class="n">{{ l.num }}</span>{{ l.text }}</span>{% endfor %}</pre>
+      {% endif %}
+      {% if f.remediation %}
+      <div class="fix">
+        <div class="h">&#9656; REMEDIATION — {{ f.remediation.summary }}</div>
+        {% if f.remediation.before or f.remediation.after %}
+        <pre class="diff">{% for line in f.remediation.before.split('\n') %}<span class="del">- {{ line }}</span>
+{% endfor %}{% for line in f.remediation.after.split('\n') %}<span class="add">+ {{ line }}</span>
+{% endfor %}</pre>
         {% endif %}
       </div>
-      <div class="text-xs text-gray-400 mt-2">{{ lr.detail }}</div>
-    </div>
-    {% endfor %}
-  </section>
-
-  <!-- Findings -->
-  <h2 class="text-lg font-bold mb-4 text-gray-200">Findings</h2>
-  {% if not card.findings %}
-    <div class="card rounded-xl p-8 text-center text-emerald-400">
-      ✓ No findings. This agent passed all enabled checks.
-    </div>
-  {% endif %}
-  {% for f in card.findings %}
-  <article class="card rounded-xl p-5 mb-4">
-    <div class="flex items-start justify-between gap-4">
-      <div>
-        <span class="text-xs font-bold px-2 py-0.5 rounded uppercase"
-              style="background:{{ sev_color[f.severity.value] }}22; color:{{ sev_color[f.severity.value] }}">
-          {{ f.severity.value }}
-        </span>
-        <span class="text-xs text-gray-500 ml-2">{{ f.layer.value }} · {{ f.detector }} · {{ f.confidence.value }}</span>
-        <h3 class="font-semibold mt-2">{{ f.title }}</h3>
-      </div>
-      <span class="text-xs text-gray-500 whitespace-nowrap">{{ f.location }}</span>
-    </div>
-    <p class="text-sm text-gray-300 mt-3 leading-relaxed">{{ f.description }}</p>
-    {% if f.evidence %}
-    <div class="mt-3 text-xs">
-      <span class="text-gray-500">evidence:</span>
-      <code class="text-amber-300">{{ f.evidence }}</code>
-    </div>
-    {% endif %}
-    {% if f.remediation %}
-    <div class="mt-4 border-t border-gray-800 pt-3">
-      <div class="text-xs text-emerald-400 mb-2">▸ FIX: {{ f.remediation.summary }}</div>
-      {% if f.remediation.before or f.remediation.after %}
-      <pre class="text-xs bg-black/40 rounded p-3 overflow-x-auto">{% for line in f.remediation.before.split('\n') %}<span class="diff-del">- {{ line }}</span>
-{% endfor %}{% for line in f.remediation.after.split('\n') %}<span class="diff-add">+ {{ line }}</span>
-{% endfor %}</pre>
       {% endif %}
     </div>
-    {% endif %}
-  </article>
+  </details>
   {% endfor %}
 
-  <footer class="text-center text-xs text-gray-600 mt-10 pt-6 border-t border-gray-800">
-    Generated by AgentAudit · Your agent passed the demo. Did it pass the pentest?
-    {% if card.signature %}<br>signed: {{ card.signature.hmac[:16] }}…{% endif %}
+  <footer>
+    <span>AgentAudit &middot; your agent passed the demo. did it pass the pentest?</span>
+    {% if card.signature %}<span>{{ card.signature.alg }} &middot; {{ card.signature.digest[:22] }}&hellip;</span>{% endif %}
   </footer>
 </div>
 </body>

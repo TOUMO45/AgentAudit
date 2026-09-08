@@ -7,6 +7,8 @@ layer reports its own status so a skipped layer is explicit in the scorecard.
 
 from __future__ import annotations
 
+import time
+
 from agentaudit.layers import behavioral, cloud_posture, static_graph, supply_chain
 from agentaudit.models import Layer, LayerReport
 from agentaudit.scorer import score_findings
@@ -22,6 +24,7 @@ def run_audit(
     raw_out: str | None = None,
 ) -> Scorecard:
     layer_reports: list[LayerReport] = []
+    _t0 = time.perf_counter()
 
     # Layer 2 — architectural (deterministic, the decisive gate). Runs first.
     static_findings = static_graph.analyze(agent_path)
@@ -54,4 +57,5 @@ def run_audit(
     for lr in layer_reports:
         all_findings.extend(lr.findings)
 
-    return score_findings(agent_path, all_findings, layer_reports)
+    duration_ms = int((time.perf_counter() - _t0) * 1000)
+    return score_findings(agent_path, all_findings, layer_reports, duration_ms=duration_ms)

@@ -133,6 +133,7 @@ class Scorecard:
     score: int = 0  # 0 (clean) .. 100 (worst); higher = more risk
     grade: str = "A"
     tool_version: str = "0.1.0"
+    duration_ms: int = 0
     signature: str | None = None
 
     def counts_by_severity(self) -> dict[str, int]:
@@ -158,6 +159,7 @@ class Scorecard:
             "generated_at": self.generated_at,
             "score": self.score,
             "grade": self.grade,
+            "duration_ms": self.duration_ms,
             "counts_by_severity": self.counts_by_severity(),
             "counts_by_layer": self.counts_by_layer(),
             "layer_reports": [

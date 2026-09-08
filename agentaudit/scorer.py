@@ -41,6 +41,7 @@ def score_findings(
     agent_path: str,
     findings: list[Finding],
     layer_reports: list[LayerReport],
+    duration_ms: int = 0,
 ) -> Scorecard:
     unique = _dedup(findings)
     # Most severe first, then by layer then location — stable, demo-friendly order.
@@ -57,4 +58,5 @@ def score_findings(
         score=total,
         grade=_grade(total, has_critical),
         tool_version=__version__,
+        duration_ms=duration_ms,
     )

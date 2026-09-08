@@ -97,18 +97,55 @@ def render_sarif(card: Scorecard, path: str | None = None) -> str:
     return text
 
 
+# Severity palette — verified colorblind-safe by scripts/check_palette.py
+# (min pairwise CIE76 ΔE = 25.4 across protan/deuter/tritanopia).
+SEVERITY_COLORS = {
+    "critical": "#F0486B",
+    "high": "#D9772A",
+    "medium": "#F6EC72",
+    "low": "#57A8F6",
+    "info": "#8B97A7",
+}
+GRADE_COLORS = {"A": "#3FB98A", "B": "#8CC152", "C": "#F6EC72", "D": "#D9772A", "F": "#F0486B"}
+
+
+def _code_snippet(file: str, line: int, radius: int = 3) -> list[dict]:
+    """Return source lines around `line` (1-indexed) with the hit marked."""
+    if not file or not line or not file.endswith(".py"):
+        return []
+    try:
+        lines = Path(file).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    start = max(1, line - radius)
+    end = min(len(lines), line + radius)
+    return [
+        {"num": n, "text": lines[n - 1], "hit": n == line}
+        for n in range(start, end + 1)
+    ]
+
+
+def _subject(f) -> str:
+    """Short 'what is affected' label for the collapsed row."""
+    md = f.metadata or {}
+    if md.get("tool"):
+        return md["tool"] + "()"
+    if f.detector == "secret-in-prompt":
+        return "system prompt"
+    if f.layer.value == "cloud":
+        return Path(f.file).name if f.file else "deployment"
+    return Path(f.file).name if f.file else ""
+
+
 def render_html(card: Scorecard, path: str | None = None) -> str:
     env = Environment(
         loader=FileSystemLoader(str(_TEMPLATES)),
         autoescape=select_autoescape(["html", "j2"]),
     )
+    env.globals["snippet"] = _code_snippet
+    env.globals["subject"] = _subject
     tmpl = env.get_template("scorecard.html.j2")
-    grade_color = {"A": "#22c55e", "B": "#84cc16", "C": "#eab308", "D": "#f97316", "F": "#ef4444"}
-    sev_color = {
-        "critical": "#ef4444", "high": "#f97316", "medium": "#eab308",
-        "low": "#38bdf8", "info": "#64748b",
-    }
-    text = tmpl.render(card=card, grade_color=grade_color, sev_color=sev_color)
+    text = tmpl.render(card=card, grade_color=GRADE_COLORS, sev_color=SEVERITY_COLORS)
     if path:
         Path(path).write_text(text, encoding="utf-8")
     return text

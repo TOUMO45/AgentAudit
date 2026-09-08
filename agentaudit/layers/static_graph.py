@@ -338,7 +338,7 @@ def _detect_idor(tool: ToolDef, file: str) -> Finding | None:
                         f"    record = STORE[{p}]"
                     ),
                 ),
-                metadata={"pattern": "idor", "param": p},
+                metadata={"pattern": "idor", "param": p, "tool": tool.name},
             )
     return None
 
@@ -420,7 +420,7 @@ def _detect_confused_deputy(tool: ToolDef, file: str) -> Finding | None:
                     before=f"    {leaf}({param})",
                     after=f"    safe = validate_{param}({param})   # raises on anything off the allowlist\n    {leaf}(safe)",
                 ),
-                metadata={"pattern": "confused-deputy", "param": param, "sink": leaf},
+                metadata={"pattern": "confused-deputy", "param": param, "sink": leaf, "tool": tool.name},
             )
     return None
 
@@ -485,7 +485,7 @@ def _detect_ssrf(tool: ToolDef, file: str) -> Finding | None:
                         f"    requests.get({param})"
                     ),
                 ),
-                metadata={"pattern": "ssrf", "param": param, "sink": dotted or leaf},
+                metadata={"pattern": "ssrf", "param": param, "sink": dotted or leaf, "tool": tool.name},
             )
     return None
 
@@ -526,7 +526,7 @@ def _detect_excessive_agency(tool: ToolDef, file: str) -> Finding | None:
                         before=f"@tool\ndef {tool.name}(...):  # 'read-only'\n    {dotted or leaf}(...)",
                         after=f"@tool\ndef {tool.name}(...):  # read-only, no side effects\n    return LOOKUP.get(key)",
                     ),
-                    metadata={"pattern": "excessive-agency", "sink": dotted or leaf},
+                    metadata={"pattern": "excessive-agency", "sink": dotted or leaf, "tool": tool.name},
                 )
     return None
 
