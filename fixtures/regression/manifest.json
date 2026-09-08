@@ -1,0 +1,11 @@
+{
+  "cases": [
+    {
+      "file": "reg_idor_basic.py",
+      "description": "IDOR-in-agent must keep firing",
+      "expected_detectors": [
+        "idor-in-agent"
+      ]
+    }
+  ]
+}
