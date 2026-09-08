@@ -149,15 +149,23 @@ def analyze_config(cfg: dict, source: str) -> list[Finding]:
 # ---------------------------------------------------------------------------
 # Live mode — read-only boto3
 # ---------------------------------------------------------------------------
-def check_live_role(role_name: str, region: str | None = None) -> tuple[list[Finding], dict]:
+def check_live_role(
+    role_name: str, region: str | None = None, iam_client=None
+) -> tuple[list[Finding], dict]:
     """Fetch a real IAM role's policies (read-only) and analyze them.
 
     Returns ``(findings, raw)`` where ``raw`` holds the verbatim boto3 responses
     so a human can verify the verdict against the API, not the tool's summary.
+    Only ``List*``/``Get*`` calls are issued — never a mutating API (charter
+    rule 5). ``iam_client`` may be injected (a real client, or a botocore
+    Stubber-backed client in the labeled demo).
     """
-    import boto3  # imported lazily so offline runs never require credentials
+    if iam_client is not None:
+        iam = iam_client
+    else:
+        import boto3  # imported lazily so offline runs never require credentials
 
-    iam = boto3.client("iam", region_name=region)
+        iam = boto3.client("iam", region_name=region)
     raw: dict[str, Any] = {}
     findings: list[Finding] = []
     src = f"iam-role://{role_name}"

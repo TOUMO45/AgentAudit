@@ -1,0 +1,36 @@
+name: agentaudit-ci
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Integrity guard (fixtures + detectors unchanged)
+        run: ./guard.sh check
+      - name: Unit + contract tests
+        run: pytest -q
+      - name: Self-audit — vulnerable fixture must FAIL the gate
+        run: |
+          if python -m agentaudit run --agent fixtures/vulnerable_agent.py --out out/vuln; then
+            echo "::error::vulnerable fixture unexpectedly passed the gate"; exit 1
+          fi
+      - name: Self-audit — hardened fixture must PASS the gate
+        run: python -m agentaudit run --agent fixtures/hardened_agent.py --out out/hard
+      - name: Upload SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: out/vuln/report.sarif
+        continue-on-error: true
