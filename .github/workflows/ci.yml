@@ -20,6 +20,7 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -e .
       - name: Integrity guard (fixtures + detectors unchanged)
         run: ./guard.sh check
       - name: Palette is colorblind-safe
@@ -62,6 +63,7 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -e .
       - name: Audit the PR's demo target
         run: python -m agentaudit run --agent fixtures/vulnerable_agent.py --out out/pr || true
       - name: Build Markdown comment

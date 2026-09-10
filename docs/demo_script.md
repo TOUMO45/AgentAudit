@@ -4,7 +4,9 @@
 runs against committed code.**
 
 Recording setup: terminal + browser, 1440×900, dark theme. Pre-run
-`pip install -r requirements.txt` off-camera. Have the dashboard NOT yet started.
+`pip install -r requirements.txt && pip install -e .` off-camera (the second
+registers the `agentaudit` command; without it, use `python -m agentaudit.cli`
+everywhere below). Have the dashboard NOT yet started.
 
 ---
 
@@ -24,7 +26,8 @@ pentest?"*
 
 Terminal:
 ```bash
-python -m agentaudit run --agent fixtures/vulnerable_agent.py
+agentaudit run --agent fixtures/vulnerable_agent.py
+# fallback if not on PATH: python -m agentaudit.cli run --agent fixtures/vulnerable_agent.py
 ```
 
 Narrate while it runs (~0.3s):
@@ -51,7 +54,7 @@ Quick scroll of `out/scorecard.html` (the signed dark scorecard) — 3 seconds.
 
 Terminal:
 ```bash
-python -m agentaudit run --agent fixtures/hardened_agent.py ; echo "exit=$?"
+agentaudit run --agent fixtures/hardened_agent.py ; echo "exit=$?"
 ```
 
 Freeze on:
@@ -124,10 +127,10 @@ Slide: `references/real_world_findings.md`, Step 4 section.
 
 Terminal:
 ```bash
-agentaudit dashboard
+agentaudit dashboard    # prints the URL and auto-opens the browser
 ```
 
-Browser opens to `http://localhost:8770`. Click **Run full audit** on
+Browser opens to `http://127.0.0.1:8770/` (the command also prints it). Click **Run full audit** on
 `vulnerable_agent.py`. Show the 3 pipeline stages resolve to RAN, the risk ring
 hit F, the findings list, then the **Policy & Remediation** tab with the
 generated Cedar.

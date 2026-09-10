@@ -51,15 +51,22 @@ Linux / Python 3.11 checkout.
 python -m venv .venv
 . .venv/Scripts/activate      # Windows: .venv\Scripts\Activate.ps1  |  Unix: source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .              # registers the `agentaudit` console command
 ```
 
 Python 3.11+. Core stack: `strands-agents`, `strands-agents-evals`, `boto3`,
 `jinja2` (nothing else — this is fixed by the project charter).
 
+Every command below has two equivalent forms — the short `agentaudit ...`
+(after `pip install -e .`) and `python -m agentaudit.cli ...`, which works with
+no install at all. If `agentaudit` isn't found on your PATH, use the
+`python -m` form.
+
 ## One-command run
 
 ```bash
-python -m agentaudit run --agent fixtures/vulnerable_agent.py
+agentaudit run --agent fixtures/vulnerable_agent.py
+# or, with no install:  python -m agentaudit.cli run --agent fixtures/vulnerable_agent.py
 ```
 
 You'll get a terminal summary plus three artifacts in `out/`:
@@ -76,8 +83,8 @@ The process exits **non-zero** when findings meet the `--fail-on` threshold
 ### The before/after that tells the whole story
 
 ```bash
-python -m agentaudit run --agent fixtures/vulnerable_agent.py   # GRADE F, exits 1
-python -m agentaudit run --agent fixtures/hardened_agent.py     # GRADE A, exits 0
+agentaudit run --agent fixtures/vulnerable_agent.py   # GRADE F, exits 1
+agentaudit run --agent fixtures/hardened_agent.py     # GRADE A, exits 0
 ```
 
 Same agent family; the second one has every planted flaw fixed. A security tool
@@ -117,6 +124,9 @@ attached-and-active, and AgentCore Memory encryption/TTL — offline against a
 
 ## Usage
 
+Both forms work everywhere — `agentaudit <cmd>` after `pip install -e .`, or
+`python -m agentaudit.cli <cmd>` with no install:
+
 ```bash
 agentaudit run --agent path/to/agent.py \
     [--deploy-config agentcore.deploy.json] \   # else auto-discovered as <agent>.deploy.json
@@ -126,12 +136,19 @@ agentaudit run --agent path/to/agent.py \
 
 agentaudit verify --json out/report.signed.json   # prove a report wasn't tampered with
 agentaudit dashboard [--port 8770] [--no-open]     # live web console over HTTP
+
+# guaranteed fallback if `agentaudit` isn't on your PATH:
+python -m agentaudit.cli run --agent path/to/agent.py
+python -m agentaudit.cli dashboard
 ```
 
-The dashboard serves over HTTP (never `file://`) so its `fetch('/api/...')`
-calls resolve; every number it shows comes from a real scan, and each section
-has an explicit empty / unavailable state — it never renders mock data as if it
-were a real result.
+`agentaudit dashboard` prints its URL and auto-opens your browser to
+`http://127.0.0.1:8770/` (`--no-open` to just print; it walks to the next free
+port if 8770 is busy). It serves over HTTP — **never** open `ui.html` as a
+`file://` path; the page shows a banner telling you so if you do. Every number
+the dashboard shows comes from a real scan, and each section has an explicit
+empty / unavailable state — it never renders mock data as if it were a real
+result.
 
 Live IAM check demo (works with or without AWS credentials — stubbed mode is
 clearly labeled):

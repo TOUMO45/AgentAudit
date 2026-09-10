@@ -128,12 +128,14 @@ def serve(host: str = "127.0.0.1", port: int = 8770, open_browser: bool = True) 
     actual_port = srv.server_address[1]
     url = f"http://{host}:{actual_port}/"
 
-    print(f"AgentAudit dashboard -> {url}")
-    print("  serving over HTTP (never file://); all data is live, nothing is mocked")
+    print(f"AgentAudit dashboard -> {url}", flush=True)
+    print("  serving over HTTP (never file://); all data is live, nothing is mocked", flush=True)
     if actual_port != port:
-        print(f"  note: port {port} was busy, using {actual_port}")
+        print(f"  note: port {port} was busy, using {actual_port}", flush=True)
 
     if open_browser:
+        print("  opening your browser...", flush=True)
+
         def _open():
             time.sleep(0.6)  # let serve_forever get going first
             try:
@@ -141,8 +143,10 @@ def serve(host: str = "127.0.0.1", port: int = 8770, open_browser: bool = True) 
             except Exception:
                 pass
         threading.Thread(target=_open, daemon=True).start()
+    else:
+        print("  (--no-open) open the URL above yourself", flush=True)
 
-    print("  press Ctrl+C to stop")
+    print("  press Ctrl+C to stop", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
