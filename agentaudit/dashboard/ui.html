@@ -78,6 +78,11 @@
                background:#0B111C;border-radius:7px;padding:8px 10px;margin-top:6px}
   .errbox .acts{display:flex;gap:8px;margin-top:10px}
   .errbox button{font-size:12px;padding:6px 12px}
+
+  /* file:// guard — shown only when the page is opened directly, not served */
+  #file-guard{background:var(--high);color:#241202;font-size:13px;font-weight:500;
+              padding:10px 16px;text-align:center}
+  #file-guard code{background:rgba(0,0,0,.18);padding:1px 6px;border-radius:4px;font-weight:600}
   h2.sec{font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);
          font-weight:600;margin:26px 0 12px}
 
@@ -157,6 +162,10 @@
 </style>
 </head>
 <body>
+<div id="file-guard" hidden>
+  <strong>This page needs to be served.</strong>
+  Run <code>agentaudit dashboard</code> from the project root — don't open this file directly.
+</div>
 <div class="wrap">
   <header class="bar">
     <div class="brand">Agent<b>Audit</b> <span style="color:var(--muted2);font-weight:400">security console</span></div>
@@ -196,6 +205,12 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// If this file was opened directly (file://) instead of served, fetch('/api/...')
+// has no origin to resolve and every call fails. Show one clear banner and stop.
+if (window.location.protocol === 'file:') {
+  document.getElementById('file-guard').hidden = false;
+}
+
 const SEV=['critical','high','medium','low','info'];
 const COLOR={critical:'var(--crit)',high:'var(--high)',medium:'var(--med)',low:'var(--low)',info:'var(--info)'};
 const GRADE={A:'#3FB98A',B:'#8CC152',C:'#F6EC72',D:'#D9772A',F:'#F0486B'};
