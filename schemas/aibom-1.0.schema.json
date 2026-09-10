@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/agentaudit/agentaudit/schemas/aibom-1.0.schema.json",
+  "title": "AgentAudit AIBOM v1.0",
+  "description": "Stricter contract on top of CycloneDX 1.6 for the aibom.json emitted by `agentaudit run`. The file MUST also validate against schemas/cyclonedx-bom-1.6.schema.json.",
+  "type": "object",
+  "required": ["bomFormat", "specVersion", "serialNumber", "version", "metadata", "components", "dependencies"],
+  "properties": {
+    "bomFormat": { "const": "CycloneDX" },
+    "specVersion": { "const": "1.6" },
+    "serialNumber": { "type": "string", "pattern": "^urn:uuid:[0-9a-fA-F-]{36}$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "metadata": {
+      "type": "object",
+      "required": ["timestamp", "tools", "component"],
+      "properties": {
+        "timestamp": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$" },
+        "tools": {
+          "type": "object",
+          "required": ["components"],
+          "properties": {
+            "components": {
+              "type": "array",
+              "minItems": 1,
+              "contains": {
+                "type": "object",
+                "properties": { "name": { "const": "AgentAudit" } },
+                "required": ["name", "version"]
+              }
+            }
+          }
+        },
+        "component": {
+          "type": "object",
+          "required": ["type", "bom-ref", "name", "properties"],
+          "properties": {
+            "type": { "const": "application" },
+            "bom-ref": { "type": "string", "pattern": "^agent:" },
+            "properties": {
+              "type": "array",
+              "allOf": [
+                { "contains": { "type": "object", "required": ["name", "value"], "properties": { "name": { "const": "agentaudit:sourcePath" } } } },
+                { "contains": { "type": "object", "required": ["name", "value"], "properties": { "name": { "const": "agentaudit:sourceSha256" }, "value": { "type": "string", "pattern": "^[0-9a-f]{64}$" } } } },
+                { "contains": { "type": "object", "required": ["name", "value"], "properties": { "name": { "const": "agentaudit:framework" } } } },
+                { "contains": { "type": "object", "required": ["name", "value"], "properties": { "name": { "const": "agentaudit:toolCount" } } } },
+                { "contains": { "type": "object", "required": ["name", "value"], "properties": { "name": { "const": "agentaudit:capabilityPairCount" } } } },
+                { "contains": { "type": "object", "required": ["name", "value"], "properties": { "name": { "const": "agentaudit:modelStaticallyDeterminable" }, "value": { "enum": ["true", "false"] } } } }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "bom-ref", "name", "properties"],
+        "properties": {
+          "type": { "enum": ["application", "library", "machine-learning-model", "framework", "data"] },
+          "bom-ref": { "type": "string", "pattern": "^(tool|dep|model|mcp):" },
+          "properties": {
+            "type": "array",
+            "minItems": 1,
+            "contains": {
+              "type": "object",
+              "required": ["name", "value"],
+              "properties": {
+                "name": { "const": "agentaudit:componentKind" },
+                "value": { "enum": ["agent-tool", "dependency", "model", "mcp-server", "mcp-gateway"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "minItems": 1,
+      "contains": {
+        "type": "object",
+        "required": ["ref", "dependsOn"],
+        "properties": {
+          "ref": { "type": "string", "pattern": "^agent:" },
+          "dependsOn": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "annotations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["bom-ref", "subjects", "annotator", "text"],
+        "properties": {
+          "bom-ref": { "type": "string", "pattern": "^cappair:" },
+          "subjects": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^tool:" } }
+        }
+      }
+    }
+  }
+}

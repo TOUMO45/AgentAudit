@@ -55,9 +55,14 @@ def _cmd_run(args: argparse.Namespace) -> int:
     json_path = out_dir / "report.signed.json"
     sarif_path = out_dir / "report.sarif"
     html_path = out_dir / "scorecard.html"
+    aibom_path = out_dir / "aibom.json"
     renderer.render_json(card, str(json_path))
     renderer.render_sarif(card, str(sarif_path))
     renderer.render_html(card, str(html_path))
+
+    from agentaudit.aibom import render_aibom
+
+    render_aibom(agent, str(aibom_path), deploy_config=args.deploy_config)
 
     _print_summary(card, out_dir)
 
@@ -91,7 +96,8 @@ def _print_summary(card, out_dir: Path) -> None:
     if not card.findings:
         print("  clean -- no findings")
     print(bar)
-    print(f" reports: {out_dir/'scorecard.html'} · {out_dir/'report.sarif'} · {out_dir/'report.signed.json'}")
+    print(f" reports: {out_dir/'scorecard.html'} · {out_dir/'report.sarif'} · "
+          f"{out_dir/'report.signed.json'} · {out_dir/'aibom.json'}")
     print(bar)
 
 
