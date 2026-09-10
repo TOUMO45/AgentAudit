@@ -432,7 +432,7 @@ function viewOverview(running){
        <span class="sw" style="background:${COLOR[s]}"></span>${cur.counts[s]} ${s}</span>`).join('')}</div>
      <div class="meta">scan took <b>${(cur.duration_ms/1000).toFixed(2)}s</b>
        · policies generated <b>${(cur.policies||[]).length}</b>
-       ${cur.source==='remote-github'?'· source <b>public GitHub repo (static only)</b>':''}</div>
+       ${cur.source==='remote-github'?`· source <b>public GitHub repo (static only)</b>${cur.license?` · license <b>${esc(cur.license)}</b>`:' · license <b>none declared</b>'}`:''}</div>
      </div></div>`;
   h+=`<h2 class="sec">Findings (${cur.findings.length})</h2>`+findingsList(cur.findings);
   return h+`</div>`;

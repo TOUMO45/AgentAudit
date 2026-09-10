@@ -44,6 +44,7 @@ from pathlib import Path
 from re import compile as _rx
 
 from agentaudit.layers import static_graph
+from agentaudit.layers import harness_integrity
 from agentaudit.layers.capability_graph import analyze_capability_pairs
 from agentaudit.models import Layer, LayerReport
 from agentaudit.scorer import score_findings
@@ -199,7 +200,10 @@ def parse_github_target(raw: str) -> GitHubTarget:
 # --------------------------------------------------------------------------- #
 # Rule 4 (pre) — size gate via the GitHub API (constant host, no user host)
 # --------------------------------------------------------------------------- #
-def _precheck_repo_size(t: GitHubTarget) -> None:
+def _precheck_repo_size(t: GitHubTarget) -> str | None:
+    """Reject an over-cap / private / missing repo. Returns the repo's SPDX
+    license id (e.g. ``"Apache-2.0"``) when the GitHub API reports one, else
+    ``None`` — used only for provenance in the scan record, never for a gate."""
     api = f"https://api.github.com/repos/{t.owner}/{t.repo}"
     req = urllib.request.Request(  # noqa: S310 - constant https host
         api,
@@ -215,9 +219,9 @@ def _precheck_repo_size(t: GitHubTarget) -> None:
         if e.code in (404, 451):
             raise RepoNotFound("Repository not found (or not public).") from None
         # Rate-limited / transient — fall through to the post-clone byte cap.
-        return
+        return None
     except (urllib.error.URLError, TimeoutError, ValueError, OSError):
-        return  # network hiccup: the post-clone cap is the backstop
+        return None  # network hiccup: the post-clone cap is the backstop
 
     if data.get("private") is True:
         raise RepoNotFound("Repository is private.")
@@ -227,6 +231,8 @@ def _precheck_repo_size(t: GitHubTarget) -> None:
             f"Repository is ~{size_kb / 1024:.0f} MB, over the "
             f"{MAX_REPO_KB // 1024} MB limit for remote scans."
         )
+    lic = (data.get("license") or {}).get("spdx_id")
+    return lic if lic and lic != "NOASSERTION" else None
 
 
 # --------------------------------------------------------------------------- #
@@ -427,6 +433,7 @@ def _scan_tree(root: str, target: GitHubTarget, *, deadline: float) -> tuple[lis
         try:
             fs = static_graph.analyze(str(path))
             fs += analyze_capability_pairs(str(path))
+            fs += harness_integrity.analyze(str(path))
         except (SyntaxError, ValueError, UnicodeDecodeError, RecursionError):
             stats["syntax_errors"] += 1
             continue
@@ -479,7 +486,7 @@ def scan_remote_repo(raw_url: str) -> dict:
     t0 = time.monotonic()
     try:
         target = parse_github_target(raw_url)            # rule 3
-        _precheck_repo_size(target)                      # rule 4 (pre)
+        license_id = _precheck_repo_size(target)         # rule 4 (pre) + provenance
 
         tmp = tempfile.mkdtemp(prefix=_TMP_PREFIX)       # rule 5
         dest = os.path.join(tmp, "repo")
@@ -503,13 +510,14 @@ def scan_remote_repo(raw_url: str) -> dict:
             )
 
         dur_ms = int((time.monotonic() - t0) * 1000)
-        return _build_record(target, findings, stats, dur_ms)
+        return _build_record(target, findings, stats, dur_ms, license_id)
     finally:
         _rmtree_robust(tmp)     # rule 5 — always, even on crash/timeout
         _SCAN_LOCK.release()    # rule 6
 
 
-def _build_record(target: GitHubTarget, findings: list, stats: dict, dur_ms: int) -> dict:
+def _build_record(target: GitHubTarget, findings: list, stats: dict, dur_ms: int,
+                  license_id: str | None = None) -> dict:
     """Shape findings exactly like backend.ScanRecord.to_dict()."""
     n_arch = len(findings)
     detail = (
@@ -551,4 +559,7 @@ def _build_record(target: GitHubTarget, findings: list, stats: dict, dur_ms: int
         ],
         "policies": [],
         "source": "remote-github",
+        "license": license_id,
+        "repo_url": f"https://github.com/{target.owner}/{target.repo}"
+        + (f"/tree/{target.ref}" if target.ref else ""),
     }

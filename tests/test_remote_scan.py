@@ -230,6 +230,48 @@ def test_clean_repo_scans_with_zero_or_few_findings(tmp_path, monkeypatch):
     assert layers == {"architectural": "ran", "behavioral": "skipped", "cloud": "skipped"}
 
 
+COREBREAK_AGENT = '''\
+from strands import Agent, tool
+
+@tool
+def delete_document(document_id: str) -> str:
+    """delete a doc"""
+    return document_id
+
+def handle_request(event):
+    messages = event["messages"]
+    return str(Agent(tools=[delete_document], messages=messages)("go"))
+'''
+
+
+def test_remote_scan_runs_the_corebreak_detector(tmp_path, monkeypatch):
+    _patch_clone_with(monkeypatch, lambda: _fake_repo(tmp_path, {"h.py": COREBREAK_AGENT}))
+    rec = rs.scan_remote_repo("https://github.com/o/cb")
+    dets = {f["detector"] for f in rec["findings"]}
+    assert "harness-model-skip-corebreak" in dets
+    assert rec["counts"]["critical"] >= 1
+
+
+def test_remote_scan_record_carries_license_and_repo_url(tmp_path, monkeypatch):
+    _patch_clone_with(monkeypatch, lambda: _fake_repo(tmp_path, {"a.py": CLEAN_AGENT}))
+    monkeypatch.setattr(rs, "_precheck_repo_size", lambda t: "Apache-2.0")
+    rec = rs.scan_remote_repo("https://github.com/o/lic")
+    assert rec["license"] == "Apache-2.0"
+    assert rec["repo_url"] == "https://github.com/o/lic"
+    assert rec["source"] == "remote-github"
+
+
+def test_precheck_returns_license_id(monkeypatch):
+    class FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self, *_a):
+            return b'{"size": 10, "private": false, "license": {"spdx_id": "MIT"}}'
+
+    monkeypatch.setattr(rs.urllib.request, "urlopen", lambda *a, **k: FakeResp())
+    assert rs._precheck_repo_size(rs.parse_github_target("https://github.com/o/r")) == "MIT"
+
+
 def test_findings_never_leak_the_temp_path(tmp_path, monkeypatch):
     _patch_clone_with(monkeypatch, lambda: _fake_repo(tmp_path, {"app/agent.py": RCE_AGENT}))
     rec = rs.scan_remote_repo("https://github.com/o/rce")

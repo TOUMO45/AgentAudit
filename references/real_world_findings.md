@@ -188,3 +188,88 @@ CRITICAL to LOW/informational rather than suppressing it.
   (char-allowlist-before-eval not recognized), fix deferred with reasoning.
 - Time box: ~50 min of the 2 h budget; stopped here with the permissively-
   licensed evidence catalogued.
+
+---
+
+# Step 4 (cont.) — curated targets via `cagataycali/awesome-strands-agents` (2026-09-10)
+
+Ran the **live remote-scan feature** (`scan_remote_repo` — the exact code path
+behind `POST /api/scan-remote`, with its URL-validation / size-cap / shallow-clone
+/ 60s-clone-30s-scan / isolated-temp-dir / single-flight guardrails) against 5
+repositories found through the maintained community index
+[`cagataycali/awesome-strands-agents`](https://github.com/cagataycali/awesome-strands-agents).
+No AWS. No execution of any cloned code — `ast` parsing only. No PRs/issues opened.
+Every scan left **0 residual temp directories**.
+
+License is read from the GitHub repo API during the size precheck and recorded
+below; findings are only catalogued for repos with an explicit MIT/Apache/BSD
+license (project guardrail 2.6).
+
+| # | Repo | License | Strands `@tool` files / .py scanned | Findings |
+|---|------|---------|-----------|----------|
+| 1 | [`cagataycali/strands-fun-tools`](https://github.com/cagataycali/strands-fun-tools) | Apache-2.0 | 17 / 22 | **1 CRITICAL** (below) |
+| 2 | `Anya2089/Airline-booking-demo-strandsagent-agentcore-ver2.0-withsolutionmanager` | none | 0 / — | `no_strands_code` (see note) |
+| 3 | [`NithiN-1808/strands-sql`](https://github.com/NithiN-1808/strands-sql) | Apache-2.0 | 0 / — | `no_strands_code` (see note) |
+| 4 | [`strands-agents/agent-builder`](https://github.com/strands-agents/agent-builder) (official) | Apache-2.0 | 3 / 36 | **0 — confirmed clean** |
+| 5 | [`eraykeskinmac/strands-hubspot`](https://github.com/eraykeskinmac/strands-hubspot) | MIT | 1 / 6 | **0 — confirmed clean** |
+
+## Verified true positive
+
+### 6. `cagataycali/strands-fun-tools` — `strands_fun_tools/face_recognition.py` — confused-deputy — **TRUE PATTERN, by-design**
+Repo license: **Apache-2.0**. Commit `741c090f952ea6e74c53270aa3bc97bd79637394`.
+Link: https://github.com/cagataycali/strands-fun-tools/blob/741c090/strands_fun_tools/face_recognition.py
+
+`@tool def face_recognition(action, collection_id=None, ..., face_id=None, ...)`
+(decorator at **line 12**). Under `action == "delete_face"` the tool runs, at
+**line 177**:
+
+```python
+if not collection_id or not face_id:
+    return {"status": "error", "content": [{"text": "❌ collection_id and face_id required"}]}
+rekognition.delete_faces(CollectionId=collection_id, FaceIds=[face_id])
+```
+
+The untrusted, model-controllable `collection_id` parameter flows into
+`rekognition.delete_faces(...)` (a `delete` sink) with only a **presence check**
+(`if not collection_id ...`), which is not validation or an allowlist. Same
+character as the `kyopark2014/strands-agent` findings #2/#3 above: for a
+**general-purpose community tool library**, per-caller authorization is expected
+to be enforced by the deploying application, and surfacing that boundary is
+exactly what AgentAudit is for. CRITICAL is defensible for a `delete` sink driven
+by model-controlled input. **Verdict: correct to surface; a prompt for the
+integrator, not necessarily a library bug.**
+
+## Expected-clean controls — no over-firing
+
+* **`strands-agents/agent-builder`** (official, Apache-2.0) — 3 Strands `@tool`
+  files, **0 findings**, GRADE A. The detector does not over-fire on
+  well-maintained first-party code.
+* **`eraykeskinmac/strands-hubspot`** (MIT) — read-only-by-design HubSpot tool,
+  1 Strands `@tool` file, **0 findings**, GRADE A. Confirms a genuinely
+  read-only tool set produces nothing.
+
+## Notes on the two `no_strands_code` results (both correct, one is a coverage gap)
+
+* **#2 Airline-booking-demo** — no `.py` file contains both `from strands import`
+  / `import strands` **and** `@tool`; the agent's tools are served through an
+  **AgentCore MCP gateway** (`mcp-tools-server/mcp_server.py`), not `@tool`
+  functions in the repo. Outside Layer 2's `@tool` scope. Also unlicensed, so it
+  would not be catalogued regardless. Commit `cdd7224`.
+* **#3 strands-sql** (Apache-2.0, commit `70021e1`) — the SQL tool is defined the
+  **legacy way**: `def sql_database(tool: ToolUse, **kwargs) -> ToolResult`
+  (`src/strands_sql/sql_database.py:569`) plus `strands.tools.Tool` wrappers —
+  **no `@tool` decorator anywhere**. `static_graph.discover_tools` only finds
+  `@tool` / `@tool(...)` definitions (charter scope), so the repo is correctly
+  reported as having no analyzable Strands agent code. **Coverage gap noted:**
+  the pre-`@tool` `(tool: ToolUse, **kwargs) -> ToolResult` tool form is not yet
+  parsed — same "explicitly deferred" treatment as the boto3-IDOR and
+  char-allowlist-eval gaps above.
+
+## Step 4 (cont.) verifier status
+- New true positive hand-verified against real source: **yes** — finding #6 in
+  `cagataycali/strands-fun-tools` (Apache-2.0), file + line + commit.
+- Two expected-clean controls confirmed clean (0 findings): **yes** —
+  `agent-builder`, `strands-hubspot`.
+- Detector coverage gap surfaced and deferred with reasoning: **yes** — legacy
+  `ToolUse`/`ToolResult` tool form (`strands-sql`).
+- Time box: ~35 min of the 90 min budget; all 5 scans completed, temp dirs clean.
