@@ -79,3 +79,112 @@ own positive/hardened fixtures and a fresh false-positive analysis, so it is
 - ≥1 finding hand-verified against real source: **yes** (calculator.py, verified true positive).
 - False positive found, root-caused, and fixed: **yes** (shell.py `ignore_errors`).
 - False negative surfaced and explicitly deferred with reasoning: **yes** (boto3 IDOR).
+
+---
+
+# Step 4 — Multi-repo real-world validation (2026-09-10)
+
+Ran **Layer 2 only** (static trust-graph + capability-graph AST analysis) against
+public GitHub repos using `strands-agents`. No AWS. No execution of any cloned
+code. No PRs/issues opened.
+
+**Running count:** 9 repos cloned (a 10th, `PacktPublishing/AI-Agents-on-AWS`,
+timed out on clone and was skipped) · ~30 Strands agent files statically scanned
+· 12 raw findings · **2 repos with a clear permissive license** contributed to
+this log.
+
+> **License gate (project guardrail):** findings are only logged below for repos
+> with an explicit MIT/Apache/BSD license. Repos scanned but **excluded from
+> this log for lacking an explicit license**: `ai-agents-frameworks`,
+> `Sandbox-on-EC2`, `costco-price-match`, `strands-agents-workshop`,
+> `sample-agentic-ai-factory`. (Several of the excluded repos did produce
+> plausible `eval`/`subprocess` confused-deputy hits on inspection, but their
+> code is not reproduced or catalogued here.)
+
+## Verified true positives
+
+### 1. `kyopark2014/strands-agent` — `application/strands_agent.py:195` — confused-deputy — **TRUE POSITIVE**
+Repo license: **Apache-2.0**. Commit `74af997c3c626fb6ff69359e239c8dde34301c97`.
+Link: https://github.com/kyopark2014/strands-agent/blob/74af997/application/strands_agent.py#L195
+
+`@tool execute_code(code: str)` runs `exec(code, _exec_globals)` on the raw
+conversation string. `_exec_globals` is defined with `"__builtins__":
+__builtins__` (the **full** builtins) plus `subprocess`, `os`, `sys`, `shutil`,
+`requests`. There is no sandbox, allowlist, or AST check. This is unrestricted
+remote code execution driven by model output. The detector's CRITICAL
+confused-deputy verdict is correct.
+
+### 2. `kyopark2014/strands-agent` — `application/strands_agent.py:545` — confused-deputy — **TRUE POSITIVE**
+Link: https://github.com/kyopark2014/strands-agent/blob/74af997/application/strands_agent.py#L545
+
+`@tool bash(command: str)` runs `subprocess.run(command, shell=True, cwd=WORKING_DIR,
+env=os.environ, timeout=300)` on the raw conversation string. Same class as the
+`execute_code` finding — raw shell from model-controlled input, no validation.
+CRITICAL confused-deputy is correct.
+
+### 3. `kyopark2014/strands-agent` — `application/strands_agent.py:278` — exfiltration-capability-pair (write+network) — **TRUE POSITIVE**
+Link: https://github.com/kyopark2014/strands-agent/blob/74af997/application/strands_agent.py#L278
+
+`@tool upload_file_to_s3(filepath: str)` reads a local file and uploads it to S3,
+returning a public download URL. In the same agent, `execute_code` and `bash`
+can write arbitrary files. Chain: exec/bash writes `~/.aws/credentials` or an
+env-secret dump to `artifacts/x`, then `upload_file_to_s3("artifacts/x")`
+returns a public URL — a complete, in-session data-exfiltration path. This is
+exactly the capability pair the detector is built to surface. HIGH is correct.
+(Minor: the detector attributes both legs to `upload_file_to_s3` because that
+one tool is classified WRITE+READ_DATA+NETWORK on its own; the staging leg is
+really `execute_code`/`bash`. The finding itself — "this tool set has a
+write→network exfil path" — is right.)
+
+## Borderline / lower-confidence
+
+### 4. `kyopark2014/strands-agent` — `strands_agent.py:429` — exfiltration-capability-pair (read+network) — **WEAK TRUE POSITIVE**
+`get_skill_instructions` (reads a fixed plugin/skill directory) + `upload_file_to_s3`
+(network egress) trips the read+network MEDIUM rule. The read tool only touches
+a fixed skills path, not arbitrary data, so the practical exfil value is low —
+but a read+egress pair in one agent is a fair thing to flag at MEDIUM.
+
+## New detector-precision gap (partial false positive) — DEFERRED
+
+### 5. `strands-rl/strands-sglang` — `calculator` (×3) — confused-deputy fires, but `eval` is guarded — **PARTIAL FALSE POSITIVE**
+Repo license: **Apache-2.0**. Commit `a8f20c3987bce5f104f1726cc6b3e5b06a1f2e4f`.
+Files: `examples/math_agent.py:19`, `examples/retokenization_drift/main.py:14`,
+`tests/integration/conftest.py:137` (same copy-pasted function).
+
+```python
+allowed = set("0123456789.+-*/() ")
+if not expression or set(expression) - allowed:
+    return f"Unsupported expression: {expression!r}"
+return str(eval(expression, {"__builtins__": {}}, {}))
+```
+
+The detector reports CRITICAL confused-deputy (`expression` → `eval`, no
+recognized validation). But there **is** a guard: a character allowlist via
+`set(expression) - allowed`. With no letters, underscores, brackets, or quotes
+possible, the classic `().__class__.__bases__...` sandbox escape is blocked —
+this is **not** RCE like finding #1.
+
+**Root cause:** the confused-deputy detector's validation recognition
+(`_VALIDATION_CALLS`) matches *named* calls like `validate(x)` / `sanitize(x)`.
+It does not recognize a set-difference character-allowlist guard
+(`set(param) - allowed_set` followed by an early return/raise).
+
+**Residual risk (why it is not a *pure* FP):** `eval` on model-influenced input
+is still fragile — widening `allowed` in a later refactor silently reintroduces
+RCE — and giant-number arithmetic (`eval("9"*300 + "**" + "9"*80)`) is a
+CPU/DoS vector the allowlist does not stop.
+
+**Decision: DEFER the fix.** Recognizing char-allowlist guards means touching
+`static_graph.py` (the decisive-gate detector) three days before the deadline;
+same conservative call as the earlier boto3-IDOR false negative. Tracked for
+post-submission: add a `set(<param>) - <set-literal>`-then-guard pattern to the
+confused-deputy validator, and downgrade "eval behind a strict allowlist" from
+CRITICAL to LOW/informational rather than suppressing it.
+
+## Step 4 verifier status
+- ≥1 new true positive hand-verified against real source: **yes** — findings
+  #1–#3 in `kyopark2014/strands-agent` (Apache-2.0), each with file/line/commit.
+- New false-positive class found and root-caused: **yes** — finding #5
+  (char-allowlist-before-eval not recognized), fix deferred with reasoning.
+- Time box: ~50 min of the 2 h budget; stopped here with the permissively-
+  licensed evidence catalogued.
