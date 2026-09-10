@@ -4,6 +4,7 @@
                      [--out DIR] [--no-dynamic] [--live-role ROLE] [--region R]
                      [--fail-on {any,critical,high,medium}]
     agentaudit verify --json report.signed.json
+    agentaudit dashboard [--port 8770] [--no-open]
 
 Exit code follows the signed JSON so the tool drops straight into a CI gate:
 non-zero means the agent failed the policy (charter success condition 1).
@@ -101,6 +102,13 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _cmd_dashboard(args: argparse.Namespace) -> int:
+    """Start the stdlib HTTP server and open a browser to it (never file://)."""
+    from agentaudit.dashboard.server import serve
+
+    return serve(host=args.host, port=args.port, open_browser=args.open_browser)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="agentaudit", description="Security audit for Strands agents.")
     p.add_argument("--version", action="version", version=f"agentaudit {__version__}")
@@ -122,6 +130,15 @@ def build_parser() -> argparse.ArgumentParser:
     verify = sub.add_parser("verify", help="verify a signed JSON report")
     verify.add_argument("--json", required=True, help="path to report.signed.json")
     verify.set_defaults(func=_cmd_verify)
+
+    dash = sub.add_parser("dashboard", help="serve the live web dashboard over HTTP")
+    dash.add_argument("--port", type=int, default=8770)
+    dash.add_argument("--host", default="127.0.0.1")
+    dash.add_argument("--open", dest="open_browser", action="store_true", default=True,
+                      help="open a browser to the dashboard (default)")
+    dash.add_argument("--no-open", dest="open_browser", action="store_false",
+                      help="do not open a browser (headless / CI use)")
+    dash.set_defaults(func=_cmd_dashboard)
     return p
 
 

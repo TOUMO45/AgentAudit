@@ -18,6 +18,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import threading
+import time
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -103,20 +106,62 @@ class Handler(BaseHTTPRequestHandler):
         return self._json({"error": "not found", "path": self.path}, 404)
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=8770)
-    ap.add_argument("--host", default="127.0.0.1")
-    args = ap.parse_args()
+def _bind(host: str, port: int, tries: int = 10) -> ThreadingHTTPServer:
+    """Bind the HTTP server, walking forward from ``port`` if it is in use."""
+    last_err: OSError | None = None
+    for p in range(port, port + tries):
+        try:
+            return ThreadingHTTPServer((host, p), Handler)
+        except OSError as e:  # port already bound
+            last_err = e
+    raise last_err if last_err else OSError("could not bind a port")
 
-    srv = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"AgentAudit dashboard -> http://{args.host}:{args.port}")
-    print("  (all data is live; nothing is mocked)")
+
+def serve(host: str = "127.0.0.1", port: int = 8770, open_browser: bool = True) -> int:
+    """Start the dashboard HTTP server and (optionally) open a browser to it.
+
+    The UI is served over HTTP from ``/`` so that ``fetch('/api/...')`` resolves
+    against a real origin. It is never opened as a ``file://`` path — doing so
+    breaks every API call and leaves the pipeline stuck on RUNNING.
+    """
+    srv = _bind(host, port)
+    actual_port = srv.server_address[1]
+    url = f"http://{host}:{actual_port}/"
+
+    print(f"AgentAudit dashboard -> {url}")
+    print("  serving over HTTP (never file://); all data is live, nothing is mocked")
+    if actual_port != port:
+        print(f"  note: port {port} was busy, using {actual_port}")
+
+    if open_browser:
+        def _open():
+            time.sleep(0.6)  # let serve_forever get going first
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
+        threading.Thread(target=_open, daemon=True).start()
+
+    print("  press Ctrl+C to stop")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\nshutting down")
+    finally:
+        srv.server_close()
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="agentaudit-dashboard")
+    ap.add_argument("--port", type=int, default=8770)
+    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--open", dest="open_browser", action="store_true", default=True,
+                    help="open a browser to the dashboard (default)")
+    ap.add_argument("--no-open", dest="open_browser", action="store_false",
+                    help="do not open a browser (headless / CI use)")
+    args = ap.parse_args(argv)
+    return serve(host=args.host, port=args.port, open_browser=args.open_browser)
 
 
 if __name__ == "__main__":
