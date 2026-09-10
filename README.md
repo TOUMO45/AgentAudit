@@ -58,15 +58,21 @@ Python 3.11+. Core stack: `strands-agents`, `strands-agents-evals`, `boto3`,
 `jinja2` (nothing else — this is fixed by the project charter).
 
 Every command below has two equivalent forms — the short `agentaudit ...`
-(after `pip install -e .`) and `python -m agentaudit.cli ...`, which works with
-no install at all. If `agentaudit` isn't found on your PATH, use the
-`python -m` form.
+(after `pip install -e .`, and only in the environment you installed it into)
+and `python -m agentaudit ...`, which works from the repo root with no install
+and no activated venv.
+
+> **`agentaudit : The term 'agentaudit' is not recognized…`** — you're in a
+> shell where the package's `Scripts/` dir isn't on `PATH` (venv not activated,
+> or you installed into a different interpreter). Either re-activate the venv
+> (`.venv\Scripts\Activate.ps1`), run `python -m pip install -e .` in the
+> interpreter you're actually using, or just use `python -m agentaudit …`.
 
 ## One-command run
 
 ```bash
 agentaudit run --agent fixtures/vulnerable_agent.py
-# or, with no install:  python -m agentaudit.cli run --agent fixtures/vulnerable_agent.py
+# or, with no install:  python -m agentaudit run --agent fixtures/vulnerable_agent.py
 ```
 
 You'll get a terminal summary plus three artifacts in `out/`:
@@ -125,7 +131,7 @@ attached-and-active, and AgentCore Memory encryption/TTL — offline against a
 ## Usage
 
 Both forms work everywhere — `agentaudit <cmd>` after `pip install -e .`, or
-`python -m agentaudit.cli <cmd>` with no install:
+`python -m agentaudit <cmd>` with no install:
 
 ```bash
 agentaudit run --agent path/to/agent.py \
@@ -138,8 +144,8 @@ agentaudit verify --json out/report.signed.json   # prove a report wasn't tamper
 agentaudit dashboard [--port 8770] [--no-open]     # live web console over HTTP
 
 # guaranteed fallback if `agentaudit` isn't on your PATH:
-python -m agentaudit.cli run --agent path/to/agent.py
-python -m agentaudit.cli dashboard
+python -m agentaudit run --agent path/to/agent.py
+python -m agentaudit dashboard
 ```
 
 `agentaudit dashboard` prints its URL and auto-opens your browser to
