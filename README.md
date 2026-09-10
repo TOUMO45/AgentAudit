@@ -23,6 +23,28 @@ AgentAudit unifies all three layers, Strands-native.
 
 ---
 
+## Project status
+
+Full breakdown in **[STATUS.md](STATUS.md)**. In short:
+
+- **Live-verified** (real command / API output on file): all 8 charter success
+  conditions, including a live AgentCore posture check against the real deployed
+  runtime ([`references/live_cloud_posture_verified.md`](references/live_cloud_posture_verified.md));
+  org-wide discovery + scan across every AgentCore runtime in the account
+  ([`references/live_org_wide_scan_verified.md`](references/live_org_wide_scan_verified.md));
+  and Layer-2 static analysis against public Strands repos with 3 hand-verified
+  true positives ([`references/real_world_findings.md`](references/real_world_findings.md)).
+- **Code-complete but not live-verified** (a time-boxed call 3 days from the
+  hackathon deadline, not a technical failure): Cedar policy auto-remediation
+  deployed to a live AgentCore Gateway, AgentCore Evaluations integration, and
+  the observability/tracing fix. Each is built, unit-tested, and committed — what
+  it lacks is a live AWS run that would need new AgentCore infrastructure.
+
+103 tests pass; `./guard.sh check` → `INTEGRITY OK`; CI green on a clean
+Linux / Python 3.11 checkout.
+
+---
+
 ## Install
 
 ```bash
@@ -72,6 +94,16 @@ from web-app penetration testing, mapped onto agents:
 - **Confused Deputy** — an untrusted parameter is forwarded, unvalidated, into a
   privileged sink.
 - **Excessive Agency** — a "read-only" tool that shells out / deletes / writes.
+- **SSRF-via-tool-param** — a `url`/`endpoint` parameter reaches an HTTP call
+  with no allowlist.
+- **Secret-in-system-prompt** — an API key / high-entropy token embedded in the
+  prompt.
+- **Tool rug-pull** — a trusted tool's `.tool_spec` silently changes between
+  scans (supply-chain / tool-poisoning).
+- **Exfiltration capability pair** — no single tool is dangerous, but the tool
+  *set* combines write / read-secret / read-data with network egress. This is
+  the finding [Cedar auto-remediation](agentaudit/remediation/cedar.py) is
+  generated from.
 
 **Layer 1 — Behavioral.** Static system-prompt hygiene (over-broad authority,
 missing refusal guidance) plus a wrapper around AWS's own
@@ -93,7 +125,13 @@ agentaudit run --agent path/to/agent.py \
     [--fail-on {any,medium,high,critical}]
 
 agentaudit verify --json out/report.signed.json   # prove a report wasn't tampered with
+agentaudit dashboard [--port 8770] [--no-open]     # live web console over HTTP
 ```
+
+The dashboard serves over HTTP (never `file://`) so its `fetch('/api/...')`
+calls resolve; every number it shows comes from a real scan, and each section
+has an explicit empty / unavailable state — it never renders mock data as if it
+were a real result.
 
 Live IAM check demo (works with or without AWS credentials — stubbed mode is
 clearly labeled):
@@ -138,6 +176,40 @@ against a deployed AgentCore agent require AWS credentials with read-only IAM
 permissions; without them, the layer degrades honestly (reported as `skipped`)
 and the demo uses a **clearly labeled** stubbed IAM response that drives the
 identical code path. Nothing is ever implied to be live when it is not.
+
+## Future work
+
+**a. Live Cedar policy enforcement via a real AgentCore Gateway.** The generator
+(`agentaudit/remediation/cedar.py`) already emits schema-valid AgentCore Cedar
+from a capability-pair finding, and `deploy.py` wraps the real `CreatePolicy`
+API. The next step is standing up an AgentCore Gateway (needs an IAM role +
+`iam:PassRole`), deploying a generated deny policy against a test runtime,
+confirming `GetPolicy` reports `ACTIVE`, and demonstrating a blocked vs. allowed
+tool call end-to-end. This turns AgentAudit from *report* to *enforced
+remediation*.
+
+**b. AgentCore Evaluations integration.** Run AWS's built-in evaluators
+(`StartBatchEvaluation` / `GetBatchEvaluation`) alongside the custom
+`strands_evals.redteam` scenarios in Layer 1, tagging each finding by origin
+(`agentcore-evaluations` vs `custom-redteam`) so results carry AWS's own
+framework's weight in addition to ours.
+
+**c. Observability / unified tracing.** Resolve the two non-fatal
+`logs:PutResourcePolicy` / `logs:PutDeliverySource` warnings seen at deploy by
+adding the scoped `logs:` delivery permissions, setting
+`UNIFIED_TRACES_DESTINATION_ENABLED=true`, and routing spans to the agent's own
+CloudWatch log group.
+
+**d. Layer 1 + Layer 2 as a bug-bounty methodology.** The behavioral layer
+(adversarial cases generated from the target's real tool list) and the static
+trust-graph layer (IDOR-in-agent, confused deputy, excessive agency, SSRF,
+exfiltration capability pairs) are directly applicable to authorized bug-bounty
+engagements on programs whose scope **explicitly covers AI / agent features** —
+where the researcher can read the agent's tool definitions and system prompt.
+Layer 3 (cloud posture) is **not** applicable to external black-box bounty work:
+it requires the target's own read-only IAM/AgentCore access, so it only fits
+direct enterprise engagements. No external target testing has been or will be
+performed from this repo; this is a note on where the methodology transfers.
 
 ## License
 
