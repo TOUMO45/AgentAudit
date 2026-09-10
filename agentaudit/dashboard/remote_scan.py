@@ -131,6 +131,24 @@ _GITHUB_URL_RE = _rx(
 _REF_RE = _rx(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 _HEX40_RE = _rx(r"^[0-9a-fA-F]{7,40}$")
 
+# Convenience shorthands accepted from the UI. Anything matched here is rewritten
+# to the canonical https://github.com/... form and then re-validated by the
+# strict regex + urlsplit checks below — this widens *accepted input only*,
+# never the security envelope.
+_GH_PREFIX_RE = _rx(r"(?i)^(?:https?://)?(?:www\.)?github\.com/")
+_BARE_REPO_RE = _rx(r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}(?:/[A-Za-z0-9._/-]*)?$")
+
+
+def _canonicalize_github(raw: str) -> str:
+    """Normalise ``github.com/o/r`` / ``www.`` / ``http://`` / bare ``o/r`` to
+    ``https://github.com/o/r``. Returns ``raw`` unchanged if none apply."""
+    m = _GH_PREFIX_RE.match(raw)
+    if m:
+        return "https://github.com/" + raw[m.end():]
+    if "://" not in raw and not raw.startswith("/") and _BARE_REPO_RE.match(raw):
+        return "https://github.com/" + raw
+    return raw
+
 
 class GitHubTarget:
     """A validated, *reconstructed* clone target — never carries raw input."""
@@ -164,11 +182,13 @@ def parse_github_target(raw: str) -> GitHubTarget:
     if any(c in raw for c in ("\n", "\r", "\t", " ", "\x00")):
         raise InvalidRepoURL("URL contains whitespace or control characters.")
 
+    raw = _canonicalize_github(raw)  # accept github.com/o/r, www., http://, bare o/r
+
     m = _GITHUB_URL_RE.match(raw)
     if not m:
         raise InvalidRepoURL(
             "Not a valid public GitHub repository URL. "
-            "Expected https://github.com/<owner>/<repo>."
+            "Expected https://github.com/<owner>/<repo> (or owner/repo)."
         )
 
     # Defence in depth: an independent structural check via urlsplit.

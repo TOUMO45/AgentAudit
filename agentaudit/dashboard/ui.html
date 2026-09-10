@@ -265,10 +265,9 @@
       <div class="act-group remote">
         <span class="act-label">or scan a public GitHub repo</span>
         <div class="act-row">
-          <input id="repo-url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
-                 pattern="https://github\.com/.+"
+          <input id="repo-url" type="text" inputmode="url" autocomplete="off" spellcheck="false"
                  placeholder="https://github.com/owner/repo"
-                 title="A public GitHub repo URL. Shallow-cloned read-only; its code is never executed, only AST-parsed by the Layer 2 analyzer.">
+                 title="A public GitHub repo. Paste the URL or just owner/repo. Shallow-cloned read-only; its code is never executed, only AST-parsed by the Layer 2 analyzer.">
           <button class="primary" id="run-remote" title="Shallow-clone the repo (read-only) and run the Layer 2 static trust-graph audit against its source">Run full audit</button>
         </div>
       </div>
@@ -577,14 +576,23 @@ async function runAll(){
   RUNNING=false; btn.disabled=false; btn.innerHTML=label;
   VIEW = LAST_ERROR ? 'overview' : 'org'; syncTabs(); await refresh();
 }
+function normalizeRepoUrl(v){
+  let u=(v||'').trim();
+  const m=u.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/(.+)$/i);
+  if(m) return 'https://github.com/'+m[1];
+  if(!/:\/\//.test(u) && !u.startsWith('/') && /^[A-Za-z0-9][\w-]{0,38}\/[\w.-]{1,100}(?:\/[\w./-]*)?$/.test(u))
+    return 'https://github.com/'+u;
+  return u;
+}
 async function runRemote(){
   const inp=document.getElementById('repo-url');
   const btn=document.getElementById('run-remote'); const label=btn.textContent;
-  const url=(inp.value||'').trim();
-  if(!/^https:\/\/github\.com\/.+/.test(url)){
-    LAST_ERROR={scope:'Remote scan', message:'Enter a URL of the form https://github.com/<owner>/<repo>.'};
+  const url=normalizeRepoUrl(inp.value);
+  if(!/^https:\/\/github\.com\/[^/\s]+\/[^/\s]+/.test(url)){
+    LAST_ERROR={scope:'Remote scan', message:'Enter a public GitHub repo — e.g. https://github.com/owner/repo (or owner/repo).'};
     VIEW='overview'; syncTabs(); render(); return;
   }
+  inp.value=url;   // reflect the normalized URL back to the field
   btn.disabled=true; inp.disabled=true; btn.textContent='Cloning…'; RUNNING=true; LAST_ERROR=null;
   VIEW='overview'; syncTabs(); render(true);
   try{

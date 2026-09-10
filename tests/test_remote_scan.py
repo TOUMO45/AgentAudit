@@ -40,14 +40,23 @@ GOOD = [
     ("https://github.com/o/r/commit/74af997c3c626fb6ff69359e239c8dde34301c97",
      ("o", "r", "74af997c3c626fb6ff69359e239c8dde34301c97")),
     ("  https://github.com/o/r  ", ("o", "r", None)),  # trimmed
+    # shorthand forms the UI accepts (normalised, then strictly re-validated)
+    ("github.com/o/r", ("o", "r", None)),
+    ("www.github.com/o/r", ("o", "r", None)),
+    ("http://github.com/o/r", ("o", "r", None)),
+    ("https://www.github.com/o/r", ("o", "r", None)),
+    ("HTTPS://GitHub.com/o/r", ("o", "r", None)),
+    ("o/r", ("o", "r", None)),
+    ("kyopark2014/strands-agent", ("kyopark2014", "strands-agent", None)),
+    ("github.com/o/r/tree/main", ("o", "r", "main")),
 ]
 
 BAD = [
     "",
     "not a url",
-    "http://github.com/o/r",                       # not https
     "ftp://github.com/o/r",
-    "github.com/o/r",                              # no scheme
+    "ssh://github.com/o/r",
+    "//github.com/o/r",                            # scheme-relative
     "https://github.com/o",                        # no repo
     "https://github.com/",                         # nothing
     "https://raw.githubusercontent.com/o/r/main/x.py",
@@ -70,6 +79,9 @@ BAD = [
     "https://localhost/o/r",
     "https://github.com/o/" + "r" * 300,           # absurd repo name
     "x" * 5000,                                    # absurd length
+    "gitlab.com/o/r",                              # bare non-github host
+    "evil.com/o/r",
+    "github.com/o/r/../../x",                      # traversal in bare form
 ]
 
 
@@ -92,6 +104,19 @@ def test_parse_rejects_non_string():
     for bad in (None, 123, b"https://github.com/o/r", ["https://github.com/o/r"]):
         with pytest.raises(rs.InvalidRepoURL):
             rs.parse_github_target(bad)  # type: ignore[arg-type]
+
+
+def test_shorthand_normalisation_reconstructs_canonical_url():
+    """The UI accepts shorthand; the reconstructed clone_url is always the
+    canonical https://github.com/<owner>/<repo>.git and never echoes input."""
+    for shorthand in ("owner/repo", "github.com/owner/repo",
+                      "www.github.com/owner/repo", "http://github.com/owner/repo"):
+        t = rs.parse_github_target(shorthand)
+        assert t.clone_url == "https://github.com/owner/repo.git"
+        assert t.display == "github.com/owner/repo"
+    # a bare non-github host is NOT silently rewritten to github
+    with pytest.raises(rs.InvalidRepoURL):
+        rs.parse_github_target("gitlab.com/owner/repo")
 
 
 # --------------------------------------------------------------------------- #
