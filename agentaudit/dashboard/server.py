@@ -10,6 +10,8 @@ Endpoints
     GET  /api/policies      generated Cedar policies + deployment status
     GET  /api/agents        live agent discovery
     POST /api/scan          {"target": "<path>"} -> run a REAL audit
+    POST /api/scan-remote   {"url": "https://github.com/<owner>/<repo>"}
+                            -> shallow-clone a public repo, Layer 2 static scan
     POST /api/scan-all      {"targets": [...]}   -> org-wide real audit
     POST /api/reset         clear dashboard state (for honest empty-state demo)
 """
@@ -88,6 +90,19 @@ class Handler(BaseHTTPRequestHandler):
                     gateway_arn=body.get("gateway_arn", ""),
                     gateway_id=body.get("gateway_id", ""),
                 )
+                return self._json({"ok": True, "scan": rec})
+
+            if self.path == "/api/scan-remote":
+                url = body.get("url")
+                if not url or not isinstance(url, str):
+                    return self._json({"error": "missing 'url'", "code": "invalid_url"}, 400)
+                from agentaudit.dashboard.remote_scan import RemoteScanError
+                try:
+                    rec = STATE.run_remote_scan(url)
+                except RemoteScanError as exc:
+                    return self._json(
+                        {"error": str(exc), "code": exc.code}, exc.http_status
+                    )
                 return self._json({"ok": True, "scan": rec})
 
             if self.path == "/api/scan-all":

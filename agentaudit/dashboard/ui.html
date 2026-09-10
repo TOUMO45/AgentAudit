@@ -49,6 +49,11 @@
   .act-sep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
   select,input{font-family:var(--mono);font-size:12px;background:var(--surface);
                color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  /* remote-repo input mode — a second, clearly separate data source */
+  .act-group.remote .act-label{color:var(--low)}
+  #repo-url{min-width:250px}
+  #repo-url::placeholder{color:var(--muted2)}
+  #repo-url:invalid{border-color:var(--high)}
 
   nav.tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
   nav.tabs button{border-radius:8px}
@@ -182,6 +187,17 @@
             <option value="fixtures/exfil/exfil_hardened.py">fixtures/exfil/exfil_hardened.py</option>
           </select>
           <button class="primary" id="run" title="Run the full 3-layer audit against the selected agent">Run full audit</button>
+        </div>
+      </div>
+      <div class="act-sep" aria-hidden="true"></div>
+      <div class="act-group remote">
+        <span class="act-label">or scan a public GitHub repo</span>
+        <div class="act-row">
+          <input id="repo-url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+                 pattern="https://github\.com/.+"
+                 placeholder="https://github.com/owner/repo"
+                 title="A public GitHub repo URL. Shallow-cloned read-only; its code is never executed, only AST-parsed by the Layer 2 analyzer.">
+          <button class="primary" id="run-remote" title="Shallow-clone the repo (read-only) and run the Layer 2 static trust-graph audit against its source">Run full audit</button>
         </div>
       </div>
       <div class="act-sep" aria-hidden="true"></div>
@@ -419,7 +435,8 @@ function render(running=false){
               : VIEW==='org'?viewOrg()
               : VIEW==='policy'?viewPolicy() : viewAgents();
 
-  const rt=v.querySelector('#err-retry'); if(rt) rt.onclick=()=>runOne();
+  const rt=v.querySelector('#err-retry'); if(rt) rt.onclick=()=>
+    (LAST_ERROR && /^https:\/\/github\.com\//.test(LAST_ERROR.target||'')) ? runRemote() : runOne();
   const dm=v.querySelector('#err-dismiss'); if(dm) dm.onclick=()=>{ LAST_ERROR=null; render(); };
 
   v.querySelectorAll('th[data-sort]').forEach(th=>th.onclick=()=>{
@@ -473,8 +490,37 @@ async function runAll(){
   RUNNING=false; btn.disabled=false; btn.innerHTML=label;
   VIEW = LAST_ERROR ? 'overview' : 'org'; syncTabs(); await refresh();
 }
+async function runRemote(){
+  const inp=document.getElementById('repo-url');
+  const btn=document.getElementById('run-remote'); const label=btn.textContent;
+  const url=(inp.value||'').trim();
+  if(!/^https:\/\/github\.com\/.+/.test(url)){
+    LAST_ERROR={scope:'Remote scan', message:'Enter a URL of the form https://github.com/<owner>/<repo>.'};
+    VIEW='overview'; syncTabs(); render(); return;
+  }
+  btn.disabled=true; inp.disabled=true; btn.textContent='Cloning…'; RUNNING=true; LAST_ERROR=null;
+  VIEW='overview'; syncTabs(); render(true);
+  try{
+    const r=await (await fetch('/api/scan-remote',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url})})).json();
+    if(r.error){ LAST_ERROR={scope:'Remote scan of '+url, target:url, message:r.error}; }
+    else if(r.scan){
+      const key=r.scan.target;
+      const sel=document.getElementById('target');
+      if(![...sel.options].some(o=>o.value===key)){
+        const o=document.createElement('option'); o.value=key; o.textContent=key; sel.appendChild(o);
+      }
+      sel.value=key;
+      toast('Remote audit complete — '+(r.scan.findings||[]).length+' finding(s) from '+key+'.');
+    }
+  }catch(e){ LAST_ERROR={scope:'Remote scan', message:String(e)}; }
+  RUNNING=false; btn.disabled=false; inp.disabled=false; btn.textContent=label;
+  VIEW='overview'; syncTabs(); await refresh();
+}
 document.getElementById('run').onclick=runOne;
 document.getElementById('runall').onclick=runAll;
+document.getElementById('run-remote').onclick=runRemote;
+document.getElementById('repo-url').addEventListener('keydown',e=>{ if(e.key==='Enter') runRemote(); });
 document.getElementById('reset').onclick=async()=>{
   if(!confirm('Clear all scan state?\n\nThe dashboard will return to its empty state.')) return;
   await fetch('/api/reset',{method:'POST'}); toast('State cleared.'); await refresh();

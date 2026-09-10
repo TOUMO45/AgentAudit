@@ -130,6 +130,22 @@ class DashboardState:
         self.save()
         return rec.to_dict()
 
+    def run_remote_scan(self, url: str) -> dict:
+        """Scan a public GitHub repo (Layer 2 static only) and store the result.
+
+        All validation, shallow-clone, resource limits, isolation, single-flight
+        and cleanup live in :mod:`agentaudit.dashboard.remote_scan`. This method
+        only persists the returned record under its synthetic target key so the
+        existing dashboard views render it unchanged.
+        """
+        from agentaudit.dashboard.remote_scan import scan_remote_repo
+
+        record = scan_remote_repo(url)
+        self.scans[record["target"]] = record
+        self.last_verified = record["generated_at"]
+        self.save()
+        return record
+
     def run_org_scan(self, targets: list[str] | None = None) -> dict:
         """Scan every discovered agent (or an explicit target list)."""
         disc = list_registered_agents()
