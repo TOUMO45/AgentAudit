@@ -9,7 +9,13 @@ from __future__ import annotations
 
 import time
 
-from agentaudit.layers import behavioral, cloud_posture, static_graph, supply_chain
+from agentaudit.layers import (
+    behavioral,
+    cloud_posture,
+    harness_integrity,
+    static_graph,
+    supply_chain,
+)
 from agentaudit.models import Layer, LayerReport
 from agentaudit.scorer import score_findings
 from agentaudit.models import Scorecard
@@ -29,6 +35,11 @@ def run_audit(
     # Layer 2 — architectural (deterministic, the decisive gate). Runs first.
     static_findings = static_graph.analyze(agent_path)
     detail = f"static tool-trust graph: {len(static_findings)} finding(s)"
+
+    # Harness integrity — CoreBreak / CVE-2026-18830 model-skip check (ast only).
+    corebreak = harness_integrity.analyze(agent_path)
+    static_findings = static_findings + corebreak
+    detail += f"; harness-integrity checked ({len(corebreak)} finding(s))"
 
     # Supply-chain rug-pull (imports the agent; must never crash an audit).
     try:

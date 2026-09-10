@@ -41,7 +41,7 @@ three independent public renderings**, which agree:
 | ASI09 | Human-Agent Trust Exploitation |
 | ASI10 | Rogue Agents |
 
-## Detector → ASI (13 current `rule_id`s)
+## Detector → ASI (14 current `rule_id`s — 12 mapped, 2 explicitly unmapped)
 
 `rule_id`s enumerated by `grep -rn 'detector="' agentaudit/layers/` (not from
 memory). A test — `tests/test_asi_taxonomy.py::test_every_layer_detector_is_classified`
@@ -50,6 +50,7 @@ memory). A test — `tests/test_asi_taxonomy.py::test_every_layer_detector_is_cl
 | rule_id | primary | secondary | justification (against the encoded ASI definition) |
 |---------|---------|-----------|----------------------------------------------------|
 | `idor-in-agent` | ASI03 | ASI02 | "trust assumptions lead to unauthorized actions" — a caller-supplied id drives a read of another principal's record with no ownership check. |
+| `harness-model-skip-corebreak` | ASI01 | ASI05 | CoreBreak / CVE-2026-18830: a caller-supplied `toolUse` block in the latest message makes the event loop "pursue unintended objectives … through … instruction injection" with the model never running (ASI01); the injected tool call then executes with attacker-chosen arguments outside model mediation (ASI05). See `references/corebreak_detector_basis.md`. |
 | `confused-deputy` | ASI02 | ASI05 | "agents misusing … tools … causing harmful side effects despite having valid permissions"; ASI05 when the privileged sink is `exec`/`subprocess`. |
 | `ssrf-via-tool-param` | ASI02 | ASI03 | a `url`/`endpoint` tool parameter drives an HTTP call to an unintended destination; ASI03 when it reaches the instance metadata / credential endpoints. |
 | `excessive-agency` | ASI02 | ASI05 | "excessive execution" — a read-named tool shells out / deletes / writes; ASI05 for the `os.system`/`subprocess` path. |

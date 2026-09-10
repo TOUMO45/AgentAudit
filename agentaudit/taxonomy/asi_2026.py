@@ -108,6 +108,7 @@ ASI_ORDER: list[str] = list(ASI)
 RULE_ASI: dict[str, list[str]] = {
     # architectural / static trust graph
     "idor-in-agent": ["ASI03", "ASI02"],
+    "harness-model-skip-corebreak": ["ASI01", "ASI05"],
     "confused-deputy": ["ASI02", "ASI05"],
     "ssrf-via-tool-param": ["ASI02", "ASI03"],
     "excessive-agency": ["ASI02", "ASI05"],
