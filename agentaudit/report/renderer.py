@@ -17,6 +17,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from agentaudit import signing
 from agentaudit.models import Scorecard, Severity
+from agentaudit.taxonomy import asi_2026
 
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -44,14 +45,23 @@ def render_sarif(card: Scorecard, path: str | None = None) -> str:
     rules: dict[str, dict] = {}
     results = []
     for f in card.findings:
+        asi_codes = asi_2026.asi_for(f.detector)
         if f.detector not in rules:
-            rules[f.detector] = {
+            rule = {
                 "id": f.detector,
                 "name": f.detector.replace("-", " ").title().replace(" ", ""),
                 "shortDescription": {"text": f.title},
                 "defaultConfiguration": {"level": _SARIF_LEVEL[f.severity]},
-                "properties": {"layer": f.layer.value},
+                "properties": {"layer": f.layer.value, "asi": asi_codes},
             }
+            # SARIF 2.1.0 native taxonomy: a "relevant" relationship from this
+            # rule to each OWASP-ASI-2026 taxon it maps to.
+            rels = asi_2026.sarif_rule_relationships(f.detector)
+            if rels:
+                rule["relationships"] = rels
+            elif asi_2026.is_unmapped(f.detector):
+                rule["properties"]["asiUnmapped"] = asi_2026.unmapped_reason(f.detector)
+            rules[f.detector] = rule
         result = {
             "ruleId": f.detector,
             "level": _SARIF_LEVEL[f.severity],
@@ -60,8 +70,12 @@ def render_sarif(card: Scorecard, path: str | None = None) -> str:
                 "severity": f.severity.value,
                 "layer": f.layer.value,
                 "confidence": f.confidence.value,
+                "asi": asi_codes,
             },
         }
+        result_taxa = asi_2026.sarif_result_taxa(f.detector)
+        if result_taxa:
+            result["taxa"] = result_taxa
         if f.file:
             region = {"startLine": f.line} if f.line else {"startLine": 1}
             result["locations"] = [
@@ -85,9 +99,11 @@ def render_sarif(card: Scorecard, path: str | None = None) -> str:
                         "informationUri": "https://github.com/agentaudit/agentaudit",
                         "version": card.tool_version,
                         "rules": list(rules.values()),
+                        "supportedTaxonomies": [asi_2026.sarif_taxonomy_reference()],
                     }
                 },
                 "results": results,
+                "taxonomies": [asi_2026.sarif_taxonomy_component()],
             }
         ],
     }
@@ -144,6 +160,8 @@ def render_html(card: Scorecard, path: str | None = None) -> str:
     )
     env.globals["snippet"] = _code_snippet
     env.globals["subject"] = _subject
+    env.globals["asi_for"] = asi_2026.asi_for
+    env.globals["asi_tooltip"] = asi_2026.tooltip_for
     tmpl = env.get_template("scorecard.html.j2")
     text = tmpl.render(card=card, grade_color=GRADE_COLORS, sev_color=SEVERITY_COLORS)
     if path:

@@ -81,8 +81,12 @@ def _print_summary(card, out_dir: Path) -> None:
         f"{counts['medium']} medium / {counts['low']} low"
     )
     print(bar)
+    from agentaudit.taxonomy import asi_2026
+
     for f in card.findings:
-        print(f"  [{f.severity.value.upper():<8}] {f.detector:<28} {f.location}")
+        asi = asi_2026.label_for(f.detector)
+        tag = f" [{asi}]" if asi else ""
+        print(f"  [{f.severity.value.upper():<8}] {f.detector}{tag}  {f.location}")
         print(f"             {f.title}")
     if not card.findings:
         print("  clean -- no findings")
