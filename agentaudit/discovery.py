@@ -167,6 +167,43 @@ def list_registered_agents(client=None, prefer_registry: bool = True) -> Discove
                            "no agent runtimes exist in this account/region")
 
 
+def scan_discovered_runtimes(client=None, region: str = REGION) -> dict:
+    """Org-wide Layer-3 scan: discover every runtime, run the live cloud-posture
+    check against each, and aggregate.
+
+    Discovered agents are *deployed runtimes* with no source, so only Layer 3
+    (``check_live_runtime`` -> ``GetAgentRuntime`` posture) applies here. The
+    static trust-graph (Layer 2) runs against source files, covered by the
+    dashboard's per-file scans and the multi-repo validation.
+    """
+    from agentaudit.layers.cloud_posture import check_live_runtime
+
+    disc = list_registered_agents(client=client)
+    per_agent: dict[str, list[Any]] = {}
+    raw_by_agent: dict[str, dict] = {}
+    errors: dict[str, str] = {}
+
+    for rec in disc.agents:
+        try:
+            findings, raw = check_live_runtime(rec.agent_id, region=region, cp_client=client)
+            per_agent[rec.agent_id] = findings
+            raw_by_agent[rec.agent_id] = raw
+        except Exception as e:  # keep scanning the rest of the estate
+            per_agent[rec.agent_id] = []
+            errors[rec.agent_id] = f"{type(e).__name__}: {str(e)[:200]}"
+
+    summary = summarize({k: v for k, v in per_agent.items()})
+    return {
+        "discovery": disc.to_dict(),
+        "per_agent_findings": {
+            k: [f.to_dict() for f in v] for k, v in per_agent.items()
+        },
+        "raw_by_agent": raw_by_agent,
+        "errors": errors,
+        "summary": summary,
+    }
+
+
 def summarize(per_agent: dict[str, list[Any]]) -> dict:
     """Aggregate severity counts across agents.
 

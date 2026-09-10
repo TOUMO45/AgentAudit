@@ -94,3 +94,59 @@ def test_agent_record_serializes_without_raw():
 def test_discovery_result_dict_shape():
     d = DiscoveryResult([], "none", False, "denied").to_dict()
     assert d["count"] == 0 and d["available"] is False and d["reason"] == "denied"
+
+
+# --- Step 3: org-wide Layer-3 scan --------------------------------------
+class _FakeCPRuntimes:
+    class _SM:
+        operation_names = ["ListAgentRuntimes"]
+    meta = type("M", (), {"service_model": _SM()})()
+
+    def __init__(self, runtimes, runtime_details):
+        self._runtimes = runtimes
+        self._details = runtime_details
+
+    def get_paginator(self, name):
+        raise Exception("no paginator")
+
+    def list_agent_runtimes(self, **kw):
+        return {"agentRuntimes": self._runtimes}
+
+    def get_agent_runtime(self, agentRuntimeId):  # noqa: N803
+        return self._details[agentRuntimeId]
+
+
+def test_org_scan_runs_layer3_per_agent_and_aggregates():
+    from agentaudit.discovery import scan_discovered_runtimes
+
+    cp = _FakeCPRuntimes(
+        runtimes=[
+            {"agentRuntimeId": "rt-a", "agentRuntimeName": "a",
+             "agentRuntimeArn": "arn:...:runtime/rt-a", "status": "READY"},
+            {"agentRuntimeId": "rt-b", "agentRuntimeName": "b",
+             "agentRuntimeArn": "arn:...:runtime/rt-b", "status": "READY"},
+        ],
+        runtime_details={
+            # rt-a: PUBLIC + IMDSv1 -> 1 MEDIUM + 1 HIGH
+            "rt-a": {"networkConfiguration": {"networkMode": "PUBLIC"},
+                     "metadataConfiguration": {"requireMMDSV2": False}},
+            # rt-b: VPC + IMDSv2 -> clean
+            "rt-b": {"networkConfiguration": {"networkMode": "VPC"},
+                     "metadataConfiguration": {"requireMMDSV2": True}},
+        },
+    )
+    r = scan_discovered_runtimes(client=cp)
+
+    # each agent has its own findings, not duplicated
+    assert set(r["per_agent_findings"]) == {"rt-a", "rt-b"}
+    assert len(r["per_agent_findings"]["rt-a"]) == 2
+    assert r["per_agent_findings"]["rt-b"] == []
+
+    # aggregation == sum of per-agent
+    s = r["summary"]
+    for sev in ("critical", "high", "medium", "low", "info"):
+        assert s["totals"][sev] == sum(pa[sev] for pa in s["per_agent"].values())
+    assert s["totals"]["medium"] == 1
+    assert s["totals"]["high"] == 1
+    assert s["total_findings"] == 2
+    assert s["agent_count"] == 2
