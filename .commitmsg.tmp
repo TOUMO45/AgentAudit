@@ -1,0 +1,28 @@
+Phases 1, 2, 5: Cedar auto-remediation, org-wide discovery, real-data dashboard
+
+Phase 1 - Cedar policy auto-remediation:
+- New tool-capability trust graph (layers/capability_graph.py) classifying
+  WRITE / NETWORK / READ_SECRET / READ_DATA per @tool and flagging dangerous
+  capability pairs (write+network HIGH, secret+network CRITICAL).
+- remediation/cedar.py generates schema-valid AgentCore Cedar from a finding
+  using the documented model (AgentCore::IamEntity / ::Action / ::Gateway).
+  It denies the egress leg: AgentCore Cedar authorizes one call at a time and
+  exposes no context.tool_sequence, so breaking the chain is the correct and
+  schema-valid remediation rather than inventing a sequence attribute.
+- remediation/deploy.py wraps the real CreatePolicy API with a dry-run default
+  and writes policies/generated/<finding_id>.cedar plus a .json audit record.
+
+Phase 2 - org-wide discovery (discovery.py) via Agent Registry with an
+ListAgentRuntimes fallback. A permission failure is reported as "unavailable"
+with the real error, never masked as "zero agents".
+
+Phase 5 - dashboard (agentaudit/dashboard/): stdlib-only HTTP backend that
+serves only real scan output, plus a UI with the 3-stage pipeline, risk ring,
+sortable org-wide table, and Policy & Remediation view. No mock data path
+exists in the module. Fixed a real CSS collision where the .bar progress-bar
+rule zeroed the width of <header class="bar">, collapsing the header.
+
+Verified: 96 tests green, guard INTEGRITY OK, org aggregation arithmetic
+asserted against the live API, UI-served Cedar byte-matches the files on disk.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>

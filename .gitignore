@@ -26,3 +26,6 @@ aws-credentials*
 
 # Local HMAC signing key — never commit
 .agentaudit/
+
+# Generated Cedar policy artifacts (runtime audit output)
+policies/generated/

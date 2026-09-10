@@ -1,0 +1,95 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Phase1GatewayManagement",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:ListGateways",
+        "bedrock-agentcore:CreateGateway",
+        "bedrock-agentcore:GetGateway",
+        "bedrock-agentcore:UpdateGateway",
+        "bedrock-agentcore:CreateGatewayTarget",
+        "bedrock-agentcore:GetGatewayTarget",
+        "bedrock-agentcore:ListGatewayTargets",
+        "bedrock-agentcore:SynchronizeGatewayTargets"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:eu-north-1:580912381651:gateway/*"
+    },
+    {
+      "Sid": "Phase1PolicyEngineAndCedarPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:ListPolicyEngines",
+        "bedrock-agentcore:CreatePolicyEngine",
+        "bedrock-agentcore:GetPolicyEngine",
+        "bedrock-agentcore:GetPolicyEngineSummary",
+        "bedrock-agentcore:CreatePolicy",
+        "bedrock-agentcore:GetPolicy",
+        "bedrock-agentcore:GetPolicySummary",
+        "bedrock-agentcore:ListPolicies",
+        "bedrock-agentcore:ListPolicySummaries",
+        "bedrock-agentcore:UpdatePolicy",
+        "bedrock-agentcore:DeletePolicy"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:eu-north-1:580912381651:policy-engine/*"
+    },
+    {
+      "Sid": "Phase2OrgWideAgentDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:ListAgentRuntimes",
+        "bedrock-agentcore:ListAgentRuntimeVersions",
+        "bedrock-agentcore:ListAgentRuntimeEndpoints"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:eu-north-1:580912381651:runtime/*"
+    },
+    {
+      "Sid": "Phase3EvaluatorManagement",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:ListEvaluators",
+        "bedrock-agentcore:GetEvaluator",
+        "bedrock-agentcore:CreateEvaluator"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:eu-north-1:580912381651:evaluator/*"
+    },
+    {
+      "Sid": "Phase3BatchEvaluations",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:StartBatchEvaluation",
+        "bedrock-agentcore:GetBatchEvaluation",
+        "bedrock-agentcore:ListBatchEvaluations",
+        "bedrock-agentcore:StopBatchEvaluation"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:eu-north-1:580912381651:batch-evaluate/*"
+    },
+    {
+      "Sid": "Phase4ObservabilityDelivery",
+      "Effect": "Allow",
+      "Action": [
+        "logs:PutResourcePolicy",
+        "logs:PutDeliverySource",
+        "logs:PutDeliveryDestination",
+        "logs:CreateDelivery",
+        "logs:GetDelivery",
+        "logs:DescribeDeliverySources",
+        "logs:DescribeDeliveryDestinations",
+        "logs:DescribeDeliveries"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Phase1PassGatewayRole",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::580912381651:role/AgentAuditGatewayRole",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "bedrock-agentcore.amazonaws.com"
+        }
+      }
+    }
+  ]
+}

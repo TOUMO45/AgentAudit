@@ -33,6 +33,9 @@ agentaudit/layers/static_graph.py
 agentaudit/layers/cloud_posture.py
 agentaudit/layers/behavioral.py
 agentaudit/layers/supply_chain.py
+agentaudit/layers/capability_graph.py
+agentaudit/remediation/cedar.py
+agentaudit/remediation/deploy.py
 EOF
 }
 
