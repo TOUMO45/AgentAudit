@@ -1,0 +1,30 @@
+{
+  "$comment": "Ground-truth deploy descriptor for corebreak_managed_invoke.py. Least-privilege posture (0 cloud findings) PLUS an explicit CoreBreak attestation: the agent is invoked only through the patched managed AgentCore InvokeHarness API (AWS security bulletin 2026-073), so the harness-model-skip-corebreak detector clears the flag despite the source being unsanitized.",
+  "agent_name": "northwind-support-managed-invoke",
+  "region": "us-east-1",
+  "corebreak_mitigation": true,
+  "invocation": "agentcore-managed-invoke-harness",
+  "execution_role": {
+    "role_name": "northwind-support-exec",
+    "policy": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "ScopedInvoke",
+          "Effect": "Allow",
+          "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+          "Resource": "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-5"
+        }
+      ]
+    }
+  },
+  "bedrock_guardrails": {
+    "guardrail_id": "gr-abc123",
+    "attached": true
+  },
+  "agentcore_memory": {
+    "enabled": true,
+    "encryption_at_rest": true,
+    "ttl_days": 30
+  }
+}

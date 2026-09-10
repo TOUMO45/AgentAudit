@@ -6,6 +6,9 @@ detector is ast-parse only. Basis: references/corebreak_detector_basis.md.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from agentaudit.audit import run_audit
@@ -49,6 +52,31 @@ def test_vulnerable_fixture_flags_critical():
 
 def test_hardened_fixture_is_clean():
     assert hi.analyze(HARD) == []
+
+
+def test_managed_invoke_attestation_clears_the_flag_despite_unsanitized_code(tmp_path):
+    """corebreak_managed_invoke.py has the SAME unsanitized handler as the
+    vulnerable fixture; only its <agent>.deploy.json differs
+    ({"corebreak_mitigation": true}). The detector must not emit a CRITICAL."""
+    MI = "fixtures/corebreak_managed_invoke.py"
+    assert hi.analyze(MI) == []
+    assert run_audit(MI).findings == []          # and the whole scan is clean
+
+    # the identical source with NO attestation deploy.json must flag — proving
+    # the deploy field is doing the work, not the source.
+    body = Path(MI).read_text("utf-8")
+    probe = tmp_path / "agent_no_attestation.py"
+    probe.write_text(body, encoding="utf-8")
+    f = hi.analyze(str(probe))
+    assert len(f) == 1 and f[0].detector == "harness-model-skip-corebreak"
+
+    # an attestation with the wrong value does NOT clear it
+    probe2 = tmp_path / "agent_false_attestation.py"
+    probe2.write_text(body, encoding="utf-8")
+    (tmp_path / "agent_false_attestation.deploy.json").write_text(
+        json.dumps({"corebreak_mitigation": "yes-please", "invocation": "custom"}),
+        encoding="utf-8")
+    assert len(hi.analyze(str(probe2))) == 1
 
 
 def test_full_audit_vulnerable_surfaces_only_corebreak_here():

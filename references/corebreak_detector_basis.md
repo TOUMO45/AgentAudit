@@ -87,19 +87,39 @@ model-time guardrail.
    * a comprehension / membership test / `.get()` / `.pop()` on the literal
      `"toolUse"` or `"tool_use"`, **or**
    * a `BeforeModelCall` / `before_model_call` hook (`_HOOK_RE`), **or**
-   * a deploy-config marker (`corebreak_mitigation`, `invocation:
-     "…invoke-harness"` / `"managed"`, `harness.input_validation: true`).
+   * an **explicit deployer attestation** in `<agent>.deploy.json` (see below).
 
 A single-prompt agent that never ingests structured caller history is **not**
 flagged — CoreBreak requires the attacker to place a `toolUse` block into
 `messages[-1]`, which needs the app to accept structured message input.
 
+### The "managed-InvokeHarness" clause — a *deployment* fact, attested, not detected
+
+Whether an agent is invoked **only** through the patched managed AgentCore
+`InvokeHarness` API (which AWS *did* fix) is a property of *how it is deployed*,
+not of the source file — it **cannot be read from local code**. The detector
+therefore honours it only when the deployer declares it in the same
+`<agent>.deploy.json` descriptor the cloud-posture layer already reads, via
+exactly one of:
+
+```json
+{ "corebreak_mitigation": true }
+```
+```json
+{ "invocation": "agentcore-managed-invoke-harness" }
+```
+
+`_has_mitigation` clause 3 checks `cfg.get("corebreak_mitigation") is True` or
+`cfg.get("invocation") == "agentcore-managed-invoke-harness"` — nothing fuzzier.
+Any other value (including a truthy string like `"yes"`) does **not** clear the
+flag. `fixtures/corebreak_managed_invoke.py` exercises this branch.
+
 ### CLEAN wording (never "detects CoreBreak")
 
 > "strands-agents is affected by CVE-2026-18830 (CoreBreak) and has no upstream
 > fix; verified your agent strips caller-suppliable tool_use blocks from incoming
-> message history before the harness — or runs only via the patched managed
-> InvokeHarness API."
+> message history before the harness — **or its deploy descriptor attests** it
+> runs only via the patched managed InvokeHarness API."
 
 ## 5. Fixtures
 
@@ -107,6 +127,7 @@ flagged — CoreBreak requires the attacker to place a `toolUse` block into
 |---|---|
 | `fixtures/corebreak_vulnerable.py` | `handle_request` passes `event["messages"]` straight into `Agent(messages=…)` → **1 finding, `harness-model-skip-corebreak` CRITICAL** at the `Agent(...)` line |
 | `fixtures/corebreak_hardened.py` | same shape, but `_strip_tool_use(event["messages"])` first → **0 findings** |
+| `fixtures/corebreak_managed_invoke.py` (+ `.deploy.json`) | **identical unsanitized handler** to the vulnerable fixture, but `corebreak_managed_invoke.deploy.json` sets `"corebreak_mitigation": true` → **0 findings** (attestation clears the flag; proves clause 3 works and is not a source check) |
 
 ## 6. Scope
 

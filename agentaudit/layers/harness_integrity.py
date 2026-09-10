@@ -34,13 +34,18 @@ blocks stripped out.
   skipping the model and every model-time guardrail.
 * **CLEAN (no finding):** the agent strips ``toolUse``/``tool_use`` blocks from
   inbound history before the harness, registers a ``BeforeModelCall`` guard, or
-  the deploy config marks it as invoked only through the patched managed
-  ``InvokeHarness`` API. User-facing "pass" wording (never "detects CoreBreak"):
+  the ``<agent>.deploy.json`` descriptor explicitly attests managed-InvokeHarness
+  deployment (``{"corebreak_mitigation": true}`` or
+  ``{"invocation": "agentcore-managed-invoke-harness"}``). Whether an agent is
+  invoked only through the patched managed API is a *deployment* fact that
+  cannot be read from local source, so it is honoured **only** when the deployer
+  declares it in that descriptor. User-facing "pass" wording (never "detects
+  CoreBreak"):
 
       "strands-agents is affected by CVE-2026-18830 (CoreBreak) and has no
       upstream fix; verified your agent strips caller-suppliable tool_use blocks
-      from incoming message history before the harness — or runs only via the
-      patched managed InvokeHarness API."
+      from incoming message history before the harness — or its deploy descriptor
+      attests it runs only via the patched managed InvokeHarness API."
 
 A single-prompt agent that never ingests structured caller history is not
 flagged — CoreBreak needs the attacker to place a ``toolUse`` block into
@@ -193,7 +198,13 @@ def _has_mitigation(tree: ast.Module, source: str, agent_path: str) -> bool:
             for a in node.args:
                 if isinstance(a, ast.Constant) and a.value in _TOOLUSE_LITERAL:
                     return True
-    # 3. deploy-config marker: invoked only via the patched managed InvokeHarness
+    # 3. Explicit deployer attestation in <agent>.deploy.json (the same descriptor
+    #    the cloud-posture layer reads). "Invoked only through the patched managed
+    #    AgentCore InvokeHarness API" is a *deployment* fact, not a code fact, so
+    #    it can only be honoured when the deployer declares it here:
+    #        {"corebreak_mitigation": true}
+    #      or
+    #        {"invocation": "agentcore-managed-invoke-harness"}
     cfg_path = _discover_config(agent_path)
     if cfg_path and Path(cfg_path).exists():
         try:
@@ -202,13 +213,9 @@ def _has_mitigation(tree: ast.Module, source: str, agent_path: str) -> bool:
             cfg = json.loads(Path(cfg_path).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             cfg = {}
-        if cfg.get("corebreak_mitigation") or cfg.get("corebreak_mitigated"):
+        if cfg.get("corebreak_mitigation") is True:
             return True
-        inv = str(cfg.get("invocation") or cfg.get("invoke_path") or "").lower()
-        if "invoke-harness" in inv or "invokeharness" in inv or inv == "managed":
-            return True
-        harness = cfg.get("harness") or {}
-        if isinstance(harness, dict) and harness.get("input_validation"):
+        if str(cfg.get("invocation") or "").strip().lower() == "agentcore-managed-invoke-harness":
             return True
     return False
 
@@ -259,17 +266,20 @@ def analyze(agent_path: str) -> list[Finding]:
             line=line,
             evidence=(
                 f"caller-controlled '{param}' -> {sink}; no toolUse/tool_use "
-                f"sanitization, no BeforeModelCall guard, no managed-InvokeHarness "
-                f"marker in the deploy config"
+                f"sanitization, no BeforeModelCall guard, and <agent>.deploy.json "
+                f"does not attest managed-InvokeHarness deployment "
+                f"(corebreak_mitigation / invocation)"
             ),
             confidence=Confidence.HEURISTIC,
             remediation=Remediation(
                 summary=(
                     "Strip caller-suppliable tool_use/toolUse content blocks from "
                     "inbound message history before constructing or invoking the "
-                    "Agent (or invoke only through the patched managed AgentCore "
-                    "InvokeHarness API). strands-agents has no upstream fix as of "
-                    "1.55.0, so this must be enforced in your code."
+                    "Agent. strands-agents has no upstream fix as of 1.55.0, so "
+                    "this must be enforced in your code. If the agent is in fact "
+                    "invoked only through the patched managed AgentCore "
+                    "InvokeHarness API, declare it in <agent>.deploy.json "
+                    "(\"corebreak_mitigation\": true)."
                 ),
                 before=(
                     "messages = event[\"messages\"]\n"
