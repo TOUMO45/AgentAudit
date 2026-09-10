@@ -189,6 +189,99 @@ def check_live_role(
     return findings, raw
 
 
+def analyze_live_runtime(runtime: dict, source: str) -> list[Finding]:
+    """Cloud-posture checks against a real ``GetAgentRuntime`` response.
+
+    This runs against the verbatim boto3 response for a deployed AgentCore
+    runtime (no deploy descriptor needed). Checks:
+
+    * network mode — ``PUBLIC`` exposes the runtime's ingress with no VPC
+      isolation;
+    * IMDSv2 — ``requireMMDSV2`` must be true so a confused/compromised agent
+      cannot trivially read instance credentials via IMDSv1;
+    * memory encryption/TTL — reuses :func:`_memory_findings` if the response
+      carries a memory block.
+    """
+    findings: list[Finding] = []
+
+    net = (runtime.get("networkConfiguration") or {}).get("networkMode")
+    if net == "PUBLIC":
+        findings.append(
+            Finding(
+                detector="runtime-network-mode",
+                layer=Layer.CLOUD,
+                severity=Severity.MEDIUM,
+                title="AgentCore runtime uses PUBLIC network mode",
+                description=(
+                    "The runtime's networkConfiguration.networkMode is PUBLIC, so its "
+                    "egress is not confined to a customer VPC. Any SSRF or data-"
+                    "exfiltration path in the agent's tools can reach the open internet."
+                ),
+                file=source,
+                evidence=json.dumps(runtime.get("networkConfiguration") or {}, separators=(",", ":")),
+                confidence=Confidence.DETERMINISTIC,
+                remediation=Remediation(
+                    summary="Deploy the runtime in VPC network mode with egress controls.",
+                    before='"networkConfiguration": {"networkMode": "PUBLIC"}',
+                    after='"networkConfiguration": {"networkMode": "VPC", "networkModeConfig": {...}}',
+                ),
+                fingerprint=f"runtime-network-mode:{source}",
+            )
+        )
+
+    meta = runtime.get("metadataConfiguration") or {}
+    if meta.get("requireMMDSV2") is False:
+        findings.append(
+            Finding(
+                detector="runtime-imdsv2",
+                layer=Layer.CLOUD,
+                severity=Severity.HIGH,
+                title="AgentCore runtime does not require IMDSv2",
+                description=(
+                    "metadataConfiguration.requireMMDSV2 is false. IMDSv1 lets any "
+                    "in-container SSRF read the task role's temporary credentials with "
+                    "a single unauthenticated GET."
+                ),
+                file=source,
+                evidence=json.dumps(meta, separators=(",", ":")),
+                confidence=Confidence.DETERMINISTIC,
+                remediation=Remediation(
+                    summary="Set requireMMDSV2=true on the runtime metadata configuration.",
+                    before='"metadataConfiguration": {"requireMMDSV2": false}',
+                    after='"metadataConfiguration": {"requireMMDSV2": true}',
+                ),
+                fingerprint=f"runtime-imdsv2:{source}",
+            )
+        )
+
+    mem = runtime.get("memoryConfiguration") or runtime.get("agentcore_memory")
+    if mem:
+        findings += _memory_findings({"agentcore_memory": {
+            "enabled": True,
+            "encryption_at_rest": bool(mem.get("encryptionKeyArn") or mem.get("encryption_at_rest")),
+            "ttl_days": mem.get("eventExpiryDuration") or mem.get("ttl_days"),
+        }}, source)
+
+    return findings
+
+
+def check_live_runtime(
+    runtime_id: str, region: str | None = None, cp_client=None
+) -> tuple[list[Finding], dict]:
+    """GetAgentRuntime (read-only) + posture analysis. Returns (findings, raw)."""
+    if cp_client is not None:
+        cp = cp_client
+    else:
+        import boto3
+
+        cp = boto3.client("bedrock-agentcore-control", region_name=region)
+
+    resp = cp.get_agent_runtime(agentRuntimeId=runtime_id)
+    raw = {"get_agent_runtime": json.loads(json.dumps(resp, default=str))}
+    src = f"agentcore-runtime://{runtime_id}"
+    return analyze_live_runtime(resp, src), raw
+
+
 # ---------------------------------------------------------------------------
 # Layer entry point
 # ---------------------------------------------------------------------------
