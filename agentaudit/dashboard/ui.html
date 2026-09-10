@@ -34,8 +34,19 @@
   button:hover{background:var(--surface2);border-color:#3a4763}
   button.primary{background:var(--pass);color:#06231a;border-color:transparent;font-weight:600}
   button.primary:hover{filter:brightness(1.08)}
+  button.secondary{background:var(--surface2);border-color:#3a4763}
+  button.ghost{background:transparent;color:var(--muted);border-color:var(--line)}
+  button.ghost:hover{color:var(--text)}
   button:disabled{opacity:.5;cursor:not-allowed}
   button:focus-visible{outline:2px solid var(--low);outline-offset:2px}
+
+  /* header action groups — visually separate "one agent" from "every target" */
+  .actions{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+  .act-group{display:flex;flex-direction:column;gap:5px}
+  .act-label{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;
+             color:var(--muted2)}
+  .act-row{display:flex;gap:8px}
+  .act-sep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
   select,input{font-family:var(--mono);font-size:12px;background:var(--surface);
                color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 
@@ -45,10 +56,28 @@
 
   .verified{font-family:var(--mono);font-size:11px;color:var(--muted2);margin-bottom:10px}
   .verified b{color:var(--muted)}
-  .empty{background:var(--surface);border:1px dashed var(--line);border-radius:12px;
-         padding:34px;text-align:center;color:var(--muted)}
-  .empty .t{font-weight:600;color:var(--text);margin-bottom:6px}
-  .unavail{border-left:3px solid var(--high)}
+  .empty{background:var(--surface);border:1px dashed var(--line);border-radius:14px;
+         padding:44px 34px;text-align:center;color:var(--muted);
+         display:flex;flex-direction:column;align-items:center;gap:10px}
+  .empty .ei{width:40px;height:40px;color:var(--muted2);margin-bottom:2px}
+  .empty .t{font-weight:600;font-size:15px;color:var(--text)}
+  .empty .r{max-width:52ch;font-size:13px;line-height:1.5}
+  .empty .cta{margin-top:6px;font-family:var(--mono);font-size:12px;color:var(--low);
+              border:1px solid var(--line);border-radius:8px;padding:8px 14px;background:var(--surface2)}
+  .unavail{border-style:solid;border-left:3px solid var(--high)}
+  .unavail .ei{color:var(--high)}
+
+  /* real, persistent error state — not a transient toast */
+  .errbox{background:rgba(240,72,107,.10);border:1px solid var(--crit);
+          border-left:3px solid var(--crit);border-radius:12px;padding:16px 18px;
+          margin-bottom:16px;display:flex;gap:14px;align-items:flex-start}
+  .errbox .ei{width:20px;height:20px;color:var(--crit);flex:0 0 auto;margin-top:1px}
+  .errbox .body{flex:1;min-width:0}
+  .errbox .h{font-weight:600;color:var(--crit);font-size:13.5px;margin-bottom:4px}
+  .errbox .msg{font-family:var(--mono);font-size:12px;color:#E9B8C4;word-break:break-word;
+               background:#0B111C;border-radius:7px;padding:8px 10px;margin-top:6px}
+  .errbox .acts{display:flex;gap:8px;margin-top:10px}
+  .errbox button{font-size:12px;padding:6px 12px}
   h2.sec{font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);
          font-weight:600;margin:26px 0 12px}
 
@@ -63,6 +92,8 @@
   .st.pend{background:var(--surface2);color:var(--muted)}
   .st.run{background:rgba(87,168,246,.15);color:var(--low)}
   .st.skipped{background:var(--surface2);color:var(--muted)}
+  .st.error{background:rgba(240,72,107,.16);color:var(--crit)}
+  .stage.errored{border-color:var(--crit)}
   .stage .detail{font-size:12px;color:var(--muted);line-height:1.45;min-height:34px}
   /* NOTE: named .pbar (not .bar) — `.bar` would collide with <header class="bar">
      and zero its width, collapsing the whole header. */
@@ -131,15 +162,26 @@
     <div class="brand">Agent<b>Audit</b> <span style="color:var(--muted2);font-weight:400">security console</span></div>
     <span class="live-chip"><span class="d">&#9679;</span> <span id="datamode">live data — nothing mocked</span></span>
     <div class="spacer"></div>
-    <select id="target">
-      <option value="fixtures/exfil/exfil_agent.py">fixtures/exfil/exfil_agent.py</option>
-      <option value="fixtures/vulnerable_agent.py">fixtures/vulnerable_agent.py</option>
-      <option value="fixtures/hardened_agent.py">fixtures/hardened_agent.py</option>
-      <option value="fixtures/exfil/exfil_hardened.py">fixtures/exfil/exfil_hardened.py</option>
-    </select>
-    <button class="primary" id="run">Run full audit</button>
-    <button id="runall">Scan all</button>
-    <button id="reset">Reset</button>
+    <div class="actions">
+      <div class="act-group">
+        <span class="act-label">one agent</span>
+        <div class="act-row">
+          <select id="target" title="The agent source file to audit">
+            <option value="fixtures/exfil/exfil_agent.py">fixtures/exfil/exfil_agent.py</option>
+            <option value="fixtures/vulnerable_agent.py">fixtures/vulnerable_agent.py</option>
+            <option value="fixtures/hardened_agent.py">fixtures/hardened_agent.py</option>
+            <option value="fixtures/exfil/exfil_hardened.py">fixtures/exfil/exfil_hardened.py</option>
+          </select>
+          <button class="primary" id="run" title="Run the full 3-layer audit against the selected agent">Run full audit</button>
+        </div>
+      </div>
+      <div class="act-sep" aria-hidden="true"></div>
+      <div class="act-group">
+        <span class="act-label">every target</span>
+        <button id="runall" class="secondary" title="Audit every agent in the list above, then open the org-wide view">Scan all &rarr; org view</button>
+      </div>
+      <button id="reset" class="ghost" title="Clear all scan state and return the console to its empty state">Reset</button>
+    </div>
   </header>
 
   <nav class="tabs">
@@ -158,16 +200,35 @@ const SEV=['critical','high','medium','low','info'];
 const COLOR={critical:'var(--crit)',high:'var(--high)',medium:'var(--med)',low:'var(--low)',info:'var(--info)'};
 const GRADE={A:'#3FB98A',B:'#8CC152',C:'#F6EC72',D:'#D9772A',F:'#F0486B'};
 let STATE=null, VIEW='overview', SORT={k:'score',dir:-1};
+// LAST_ERROR: {scope, target, message} — a real, persistent error state, not a toast.
+let LAST_ERROR=null, RUNNING=false;
 
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const toast=(m)=>{const t=document.getElementById('toast');t.textContent=m;t.style.display='block';
   clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',4200);};
 
+const ICO_EMPTY='<svg class="ei" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h16M4 12h10M4 17h7"/><circle cx="18" cy="16" r="3.5"/><path d="M20.5 18.5 23 21"/></svg>';
+const ICO_WARN='<svg class="ei" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg>';
+const ICO_ERR='<svg class="ei" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>';
+
 function verified(ts){
   return `<div class="verified">last verified: <b>${ts?esc(ts):'never — not run yet'}</b></div>`;
 }
-function emptyBox(title,reason,cls=''){
-  return `<div class="empty ${cls}"><div class="t">${esc(title)}</div><div>${esc(reason)}</div></div>`;
+function emptyBox(title,reason,cls='',cta=''){
+  const icon = cls==='unavail' ? ICO_WARN : ICO_EMPTY;
+  return `<div class="empty ${cls}">${icon}<div class="t">${esc(title)}</div>`
+       + `<div class="r">${esc(reason)}</div>${cta?`<div class="cta">${esc(cta)}</div>`:''}</div>`;
+}
+function errorBanner(){
+  if(!LAST_ERROR) return '';
+  return `<div class="errbox">${ICO_ERR}<div class="body">
+    <div class="h">${esc(LAST_ERROR.scope)} failed</div>
+    <div>The backend returned an error. Nothing was scanned — the numbers below are unchanged.</div>
+    <div class="msg">${esc(LAST_ERROR.message)}</div>
+    <div class="acts">
+      <button class="primary" id="err-retry">Retry</button>
+      <button class="ghost" id="err-dismiss">Dismiss</button>
+    </div></div></div>`;
 }
 
 const ICON={
@@ -192,23 +253,28 @@ function ring(score,grade){
 }
 
 function pipeline(scan,running){
-  return `<div class="pipe">${STAGES.map(([k,label],i)=>{
-    let st='pend',stxt='NOT RUN',detail='Awaiting a real scan.',bar='';
-    if(running){st='run';stxt='RUNNING';detail='Executing real backend call…';
-                bar='class="pbar" style="width:66%"';}
+  const errored = !!LAST_ERROR && !running;
+  return `<div class="pipe">${STAGES.map(([k,label])=>{
+    let st='pend',stxt='NOT RUN',detail='Awaiting a real scan.',bar='class="pbar"',cls='';
+    if(errored && !scan){
+      st='error';stxt='ERROR';detail='The last run failed before this stage produced a result.';cls=' errored';
+    } else if(running){
+      st='run';stxt='RUNNING';detail='Executing real backend call…';bar='class="pbar" style="width:66%"';
+    }
     if(scan){
       const lr=(scan.layers||[]).find(l=>l.layer===k);
-      if(lr){st=lr.status==='ran'?'ran':'skipped';stxt=lr.status.toUpperCase();
-             detail=lr.detail;bar='class="pbar done"';}
-      if(k==='architectural'){
+      if(lr){st=lr.status==='ran'?'ran':(lr.status==='error'?'error':'skipped');
+             stxt=lr.status.toUpperCase();detail=lr.detail;bar='class="pbar done"';
+             if(lr.status==='error') cls=' errored';}
+      if(k==='architectural' && (!lr || lr.status==='ran')){
         const n=(scan.findings||[]).filter(f=>f.layer==='architectural').length;
         detail=`${n} finding(s) incl. trust-graph capability pairs`;
       }
     }
-    return `<div class="stage"><div class="h"><span class="icn">${ICON[k]}</span>
+    return `<div class="stage${cls}"><div class="h"><span class="icn">${ICON[k]}</span>
       <span class="n">${label}</span><span class="st ${st}">${stxt}</span></div>
       <div class="detail">${esc(detail)}</div>
-      <div class="barwrap"><div ${bar||'class="pbar"'}></div></div></div>`;
+      <div class="barwrap"><div ${bar}></div></div></div>`;
   }).join('')}</div>`;
 }
 
@@ -240,10 +306,12 @@ function viewOverview(running){
   const scans=STATE?STATE.scans:{};
   const keys=Object.keys(scans);
   const cur=keys.length?scans[document.getElementById('target').value]||scans[keys[keys.length-1]]:null;
-  let h=verified(cur?cur.generated_at:null);
+  let h=errorBanner()+verified(cur?cur.generated_at:null);
   h+=`<h2 class="sec">3-stage pipeline</h2>`+pipeline(cur,running);
-  if(!cur) return h+emptyBox('No audit has been run yet',
-      'Choose a target and press “Run full audit”. Every number shown will come from that real run.');
+  if(!cur) return h+emptyBox(
+      'No audit has been run yet',
+      'AgentAudit only ever shows numbers from a real scan. Pick an agent under “one agent” above and press Run full audit — the 3-layer pipeline will fill in with live results.',
+      '', 'Run full audit  →  static · behavioral · posture');
   h+=`<h2 class="sec">Result</h2><div class="summary">${ring(cur.score,cur.grade)}
      <div class="sumtxt"><div class="tgt">${esc(cur.target)}</div>
      <div class="chips">${SEV.slice(0,4).map(s=>`<span class="chip ${cur.counts[s]?'':'zero'}">
@@ -256,7 +324,7 @@ function viewOverview(running){
 
 function viewOrg(){
   const org=STATE?STATE.org:null;
-  let h=verified(org&&org.last_verified);
+  let h=errorBanner()+verified(org&&org.last_verified);
   if(!org||org.state!=='live')
     return h+emptyBox('No agents scanned yet',
       (org&&org.reason)||'Run “Scan all” to audit multiple agents and see org-wide totals.');
@@ -289,7 +357,7 @@ function viewOrg(){
 
 function viewPolicy(){
   const p=STATE?STATE.policies:null;
-  let h=verified(STATE&&STATE.last_verified);
+  let h=errorBanner()+verified(STATE&&STATE.last_verified);
   if(!p||p.state!=='live')
     return h+emptyBox('No Cedar policies generated yet',
       (p&&p.reason)||'Run an audit on an agent with a HIGH/CRITICAL capability pair.');
@@ -316,7 +384,7 @@ function viewPolicy(){
 
 function viewAgents(){
   const a=STATE?STATE.agents:null;
-  let h=verified(a&&a.discovered_at);
+  let h=errorBanner()+verified(a&&a.discovered_at);
   if(!a||a.state==='unavailable')
     return h+emptyBox('Agent discovery unavailable',
       (a&&a.reason)||'AWS discovery API not reachable.','unavail');
@@ -335,6 +403,9 @@ function render(running=false){
   v.innerHTML = VIEW==='overview'?viewOverview(running)
               : VIEW==='org'?viewOrg()
               : VIEW==='policy'?viewPolicy() : viewAgents();
+
+  const rt=v.querySelector('#err-retry'); if(rt) rt.onclick=()=>runOne();
+  const dm=v.querySelector('#err-dismiss'); if(dm) dm.onclick=()=>{ LAST_ERROR=null; render(); };
 
   v.querySelectorAll('th[data-sort]').forEach(th=>th.onclick=()=>{
     const k=th.dataset.sort; SORT.dir = SORT.k===k? -SORT.dir : -1; SORT.k=k; render();
@@ -361,27 +432,34 @@ async function refresh(){ STATE=await (await fetch('/api/state')).json(); render
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{
   VIEW=b.dataset.v; syncTabs(); render();});
 
-document.getElementById('run').onclick=async()=>{
-  const btn=document.getElementById('run'); btn.disabled=true; btn.textContent='Running…';
+async function runOne(){
+  const btn=document.getElementById('run'); const label=btn.textContent;
+  btn.disabled=true; btn.textContent='Running…'; RUNNING=true; LAST_ERROR=null;
   VIEW='overview'; syncTabs(); render(true);
   try{
     const t=document.getElementById('target').value;
     const r=await (await fetch('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({target:t})})).json();
-    if(r.error) toast('Scan failed: '+r.error); else toast('Audit complete — real results loaded.');
-  }catch(e){toast('Scan failed: '+e);}
-  btn.disabled=false; btn.textContent='Run full audit'; await refresh();
-};
-document.getElementById('runall').onclick=async()=>{
+    if(r.error){ LAST_ERROR={scope:'Audit of '+t, target:t, message:r.error}; }
+    else { toast('Audit complete — real results loaded.'); }
+  }catch(e){ LAST_ERROR={scope:'Audit', message:String(e)}; }
+  RUNNING=false; btn.disabled=false; btn.textContent=label; await refresh();
+}
+async function runAll(){
+  const btn=document.getElementById('runall'); const label=btn.innerHTML;
   const targets=[...document.getElementById('target').options].map(o=>o.value);
-  const btn=document.getElementById('runall'); btn.disabled=true; btn.textContent='Scanning…';
+  btn.disabled=true; btn.textContent='Scanning…'; RUNNING=true; LAST_ERROR=null;
   try{
-    await fetch('/api/scan-all',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({targets})});
-    toast(`Org-wide scan complete — ${targets.length} agents.`);
-  }catch(e){toast('Org scan failed: '+e);}
-  btn.disabled=false; btn.textContent='Scan all'; VIEW='org'; syncTabs(); await refresh();
-};
+    const r=await (await fetch('/api/scan-all',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({targets})})).json();
+    if(r.error){ LAST_ERROR={scope:'Org-wide scan', message:r.error}; }
+    else { toast(`Org-wide scan complete — ${targets.length} agents.`); }
+  }catch(e){ LAST_ERROR={scope:'Org-wide scan', message:String(e)}; }
+  RUNNING=false; btn.disabled=false; btn.innerHTML=label;
+  VIEW = LAST_ERROR ? 'overview' : 'org'; syncTabs(); await refresh();
+}
+document.getElementById('run').onclick=runOne;
+document.getElementById('runall').onclick=runAll;
 document.getElementById('reset').onclick=async()=>{
   if(!confirm('Clear all scan state?\n\nThe dashboard will return to its empty state.')) return;
   await fetch('/api/reset',{method:'POST'}); toast('State cleared.'); await refresh();
