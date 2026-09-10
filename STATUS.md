@@ -28,7 +28,69 @@ close to the deadline.
 | **Dashboard** — stdlib HTTP server, all 3 pipeline stages resolve to real data | `agentaudit dashboard`; cross-checked API vs CLI (F / 100 / 7); no stage stuck on RUNNING |
 | **CI** — green on a clean Linux / Python 3.11 checkout | GitHub Actions `agentaudit-ci` |
 
-**103 tests pass. `guard.sh check` → INTEGRITY OK.**
+**197 tests (195 pass, 2 skipped). `guard.sh check` → INTEGRITY OK.** (`agentaudit`
+console script: run `python -m pip install -e .` in the interpreter you use, or
+just `python -m agentaudit <cmd>` from the repo root.)
+
+---
+
+## 🆕 Sept-2026 enhancements (grounded in current external reality)
+
+Four add-ons, each with a research step (real fetched sources) before any code.
+Status is only what the phase's own testing actually proved.
+
+| Phase | What landed | Verification |
+|---|---|---|
+| **1 — OWASP ASI 2026 mapping** ✅ | `agentaudit/taxonomy/asi_2026.py` is the single source of truth (rule_id → ASI codes). Scorecard HTML gets an `ASIxx` chip (reuses the `.ltag` pattern); SARIF gets the **native 2.1.0 taxonomy** (`runs[].taxonomies[]` OWASP-ASI-2026 with 10 taxa, per-rule `relationships` `kind:"relevant"`, per-result `taxa`); CLI appends `[ASI0x]`. 12/14 detectors mapped; `guardrails-attached` + `runtime-network-mode` in an explicit `UNMAPPED` allowlist; `memory-encryption-ttl` → ASI06 with an ADJACENT-fit caveat kept visible. Sources cross-checked (OWASP announcement + Modulos + DeepTeam) in `references/asi_2026_mapping.md`. | `tests/test_asi_taxonomy.py` (11): detector-coverage gate that fails on any unmapped future detector; SARIF validates clean against the vendored official `schemas/sarif-schema-2.1.0.json`. CLI + HTML output pasted in the phase report. |
+| **3 — AIBOM export** ✅ | 4th artifact `out/aibom.json` from the same `agentaudit run`, built from the **same single `ast` parse** the Layer 2 detectors use (never imports the agent). A valid **CycloneDX 1.6** BOM: `metadata.component` = the agent (+ git provenance, sha256), one component per `@tool` with `agentaudit:capability` = the exact `classify_tool()` output, `library` components for import-derived deps, `machine-learning-model` + `modelCard` when the model is a static literal, MCP servers/gateways, and capability pairs as CycloneDX `annotations`. `references/aibom_format.md`. | `tests/test_aibom.py` (15): every emitted BOM validates against **both** the vendored official `schemas/cyclonedx-bom-1.6.schema.json` and the stricter project `schemas/aibom-1.0.schema.json`; tool/capability/pair counts cross-checked against `fixtures/MANIFEST.md`; a module that `raise`s on import still produces a full BOM. |
+| **2 — CoreBreak detector (CVE-2026-18830)** ✅ *(as a static detector — not "catches CoreBreak in the wild")* | `agentaudit/layers/harness_integrity.py`, rule_id `harness-model-skip-corebreak` (CRITICAL, HEURISTIC), `ast`-only. **Detection only** — no PoC, nothing sent anywhere. Confirmed from the pinned `strands-agents==1.55.0` source that the model-skip path (`_has_tool_use_in_latest_message`, `event_loop.py:105` + `:293-297`, pasted in `references/corebreak_detector_basis.md`) is present and that AWS did **not** patch the open-source SDK. The detector flags the one thing the deployer controls: caller-supplied conversation history reaching `Agent(messages=…)` / `agent.messages` with no step that strips `toolUse`/`tool_use` blocks and no managed-InvokeHarness marker. User-facing copy never says "detects CoreBreak" — it says the SDK is affected with no upstream fix and names the two real mitigations. Fixtures `corebreak_vulnerable.py` / `corebreak_hardened.py`; `harness_integrity.py` + both fixtures added to `guard.sh` and the integrity baseline re-frozen (35 paths). | `tests/test_corebreak.py` (21): vulnerable → 1 CRITICAL, hardened → clean; **zero false positives** across the existing fixture set (`vulnerable_agent.py` still F/7, `hardened_agent.py` still A/0); mitigation variants (named sanitizer / comprehension filter / `BeforeModelCall` hook) all clear the flag; parse-only proven. |
+| **4 — AgentCore Identity / Consent-Portal posture (ASI03)** ⬜ **researched, not implemented** | **Descoped for this submission** — deadline + a thin expected result (the fixture deployment has **no AgentCore Gateway**, and a consent portal attaches to a Gateway, so a live run would almost certainly return "not configured"). The research below is real and stands on its own. | — |
+
+### Phase 4 research (kept for future work — real, not invented)
+
+**4a — the feature is real.** Amazon Bedrock AgentCore Identity **managed Consent
+Portal** launched **2026-09-04**
+([AWS What's New](https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-bedrock-agentcore/),
+[docs: Configure a consent portal](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity-consent-portal.html)).
+"A hosted, AWS-managed portal that authenticates end users to an OIDC IdP and
+gathers their consent before your agent accesses a downstream resource… Each
+consent portal attaches to a single AgentCore Gateway and uses an OAuth2
+credential provider."
+
+**4b — real API surface** (installed `botocore 1.43.89`, service
+`bedrock-agentcore-control`, apiVersion `2023-06-05`, introspected via
+`session.get_service_model`): read-only ops present —
+`GetConsentPortal`, `ListConsentPortals`, `GetWorkloadIdentity`,
+`ListWorkloadIdentities`, `GetOauth2CredentialProvider`,
+`ListOauth2CredentialProviders`, `GetApiKeyCredentialProvider`,
+`ListApiKeyCredentialProviders`, `GetTokenVault`, `GetPolicy`, `GetPolicyEngine`.
+The `GetAgentRuntime` response already returned for
+`agentauditdeploy-tvmm505Sjc` carries `workloadIdentityDetails.workloadIdentityArn`
+(the `default` directory) but **no** consent/OAuth fields — those need the calls
+above.
+
+**4c — IAM delta** (new READ-ONLY actions the `agentaudit` user lacks; current
+policy has only `GetAgentRuntime` + `List*AgentRuntime*`):
+
+| Action | Resource (narrowest the API allows — ARN patterns TBC from the service model the same way `ListAgentRuntimes` was) |
+|---|---|
+| `bedrock-agentcore:ListWorkloadIdentities` | likely `*` (list) |
+| `bedrock-agentcore:GetWorkloadIdentity` | `…:workload-identity-directory/*` |
+| `bedrock-agentcore:ListConsentPortals` | likely `*` |
+| `bedrock-agentcore:GetConsentPortal` | `…:token-vault/*/consent-portal/*` |
+| `bedrock-agentcore:ListOauth2CredentialProviders` | likely `*` |
+| `bedrock-agentcore:GetOauth2CredentialProvider` | `…:token-vault/*/oauth2credentialprovider/*` |
+| `bedrock-agentcore:GetTokenVault` | `…:token-vault/default` |
+
+All `Get*`/`List*` — charter rule 5 (read-only) compliant.
+
+**4d — intended check (if resumed):** in the cloud-posture layer, pull the live
+identity/consent config for the deployed runtime and FAIL on: an OAuth scope
+broader than the agent's tool set needs; a user-resource-accessing action not
+gated by the Consent Portal (if the API exposes that as config); or
+credentials/tokens with no expiry. New rule_id → ASI03. Expected real outcome on
+the current fixture deployment: **"no consent portal / no OAuth credential
+providers configured"** — a valid, honestly-reported finding, not a rich verdict.
 
 ---
 

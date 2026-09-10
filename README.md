@@ -40,8 +40,11 @@ Full breakdown in **[STATUS.md](STATUS.md)**. In short:
   the observability/tracing fix. Each is built, unit-tested, and committed — what
   it lacks is a live AWS run that would need new AgentCore infrastructure.
 
-103 tests pass; `./guard.sh check` → `INTEGRITY OK`; CI green on a clean
-Linux / Python 3.11 checkout.
+195 tests pass (2 skipped); `./guard.sh check` → `INTEGRITY OK`; CI green on a
+clean Linux / Python 3.11 checkout. Recent additions (Sept 2026, each with a
+research step against current external reality): OWASP Top 10 for Agentic
+Applications 2026 mapping on every finding, a CycloneDX-1.6 AIBOM artifact, and a
+static CoreBreak / CVE-2026-18830 model-skip detector — see **[STATUS.md](STATUS.md)**.
 
 ---
 
@@ -75,13 +78,14 @@ agentaudit run --agent fixtures/vulnerable_agent.py
 # or, with no install:  python -m agentaudit run --agent fixtures/vulnerable_agent.py
 ```
 
-You'll get a terminal summary plus three artifacts in `out/`:
+You'll get a terminal summary plus four artifacts in `out/`:
 
 | File | Purpose |
 |------|---------|
-| `scorecard.html` | shareable dark security-dashboard scorecard |
-| `report.sarif`   | SARIF 2.1.0 — drops straight into GitHub Code Scanning |
+| `scorecard.html` | shareable dark security-dashboard scorecard; each finding carries an **OWASP ASI 2026** chip |
+| `report.sarif`   | SARIF 2.1.0 — drops straight into GitHub Code Scanning; native `OWASP-ASI-2026` taxonomy |
 | `report.signed.json` | HMAC-signed, tamper-evident; the CI gate reads this |
+| `aibom.json` | **AI Bill of Materials** — a valid CycloneDX 1.6 BOM: tools + capabilities, model, dependencies, MCP servers, capability pairs |
 
 The process exits **non-zero** when findings meet the `--fail-on` threshold
 (default `medium`), so it works as a CI gate out of the box.
@@ -201,6 +205,16 @@ and the demo uses a **clearly labeled** stubbed IAM response that drives the
 identical code path. Nothing is ever implied to be live when it is not.
 
 ## Future work
+
+**e. AgentCore Identity / Consent-Portal posture check (ASI03).** Researched
+against the real Sept-2026 managed Consent Portal launch and the installed
+`bedrock-agentcore-control` service model (`GetConsentPortal` /
+`GetWorkloadIdentity` / `ListOauth2CredentialProviders` / `GetTokenVault` all
+present); implementation descoped for this submission because the fixture
+deployment has no AgentCore Gateway (a consent portal attaches to one), so a
+live run would return "not configured". The full research — feature, API
+surface, and the exact read-only IAM delta needed — is in
+[STATUS.md](STATUS.md#-sept-2026-enhancements-grounded-in-current-external-reality).
 
 **a. Live Cedar policy enforcement via a real AgentCore Gateway.** The generator
 (`agentaudit/remediation/cedar.py`) already emits schema-valid AgentCore Cedar
