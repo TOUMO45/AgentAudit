@@ -143,6 +143,9 @@ def build(out_dir: Path) -> None:
     badge_src = ROOT / "docs" / "agentaudit-badge.svg"
     if badge_src.exists():
         (out_dir / "agentaudit-badge.svg").write_bytes(badge_src.read_bytes())
+    diagram_src = SRC / "architecture-diagram.svg"
+    if diagram_src.exists():
+        (out_dir / "architecture-diagram.svg").write_bytes(diagram_src.read_bytes())
 
     # verify no leftover placeholders slipped through
     for name in ("index.html", "aibom.html"):

@@ -181,6 +181,7 @@
   <div class="brand"><span class="g">Agent</span>Audit</div>
   <div class="links">
     <a href="#what">What it does</a>
+    <a href="#architecture">Architecture</a>
     <a href="#proof">Live proof</a>
     <a href="#aws">AWS</a>
     <a href="#try">Try it</a>
@@ -254,6 +255,19 @@
       <ul><li>iam-least-privilege</li><li>guardrails-attached</li><li>memory-encryption-ttl</li>
           <li>runtime-network-mode</li><li>runtime-imdsv2</li></ul>
     </div>
+  </div>
+</section>
+
+<section class="wrap" id="architecture">
+  <div class="sec-kicker reveal">One diagram, the whole pipeline</div>
+  <h2 class="sec-title reveal">Architecture</h2>
+  <p class="sec-lede reveal">One CLI invocation (or one dashboard scan, local or remote) fans out to the
+    four architectural detector modules plus the behavioral and cloud-posture layers, then unifies every
+    finding through the OWASP ASI 2026 taxonomy before signing and rendering it four ways. Full breakdown:
+    <a href="https://github.com/TOUMO45/AgentAudit/blob/master/docs/architecture.md">docs/architecture.md</a>
+    (renders natively as an editable Mermaid diagram on GitHub).</p>
+  <div class="term reveal" style="padding:22px">
+    <img src="architecture-diagram.svg" width="1119" height="1388" alt="AgentAudit architecture: CLI and dashboard feed the Audit Orchestrator, which runs Layer 2 (static_graph, capability_graph, supply_chain, harness_integrity), Layer 1 behavioral, and Layer 3 cloud posture; all three feed the Unified Risk Scorer, then the OWASP ASI 2026 taxonomy, then the HMAC signer, which emits the HTML scorecard, SARIF, signed JSON, and AIBOM." style="display:block;width:100%;height:auto;aspect-ratio:1118.9/1388;max-width:640px;margin:0 auto">
   </div>
 </section>
 

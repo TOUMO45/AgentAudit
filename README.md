@@ -320,9 +320,37 @@ set.
 
 ## Architecture
 
-See [`docs/architecture.md`](docs/architecture.md) for the full data-flow
-diagram (Mermaid — renders inline on GitHub), the four architectural detector
-modules, and the AWS services table.
+```mermaid
+flowchart TD
+    CLI["agentaudit run --agent FILE"] --> ORCH[Audit Orchestrator]
+    DASH["agentaudit dashboard<br/>local scan or remote GitHub scan"] --> ORCH
+
+    subgraph ARCH["Layer 2 - Architectural (decisive gate, ast only)"]
+        SG["static_graph.py<br/>IDOR, Confused Deputy, Excessive Agency, SSRF, secret-in-prompt"]
+        CG["capability_graph.py<br/>exfiltration-capability-pair"]
+        SC["supply_chain.py<br/>tool-rug-pull"]
+        HI["harness_integrity.py<br/>CoreBreak / CVE-2026-18830"]
+    end
+
+    ORCH --> ARCH
+    ORCH --> L1["Layer 1 - Behavioral<br/>prompt hygiene + strands_evals.redteam"]
+    ORCH --> L3["Layer 3 - Cloud Posture<br/>read-only boto3 against AgentCore / IAM"]
+
+    ARCH --> SCORE[Unified Risk Scorer]
+    L1 --> SCORE
+    L3 --> SCORE
+    SCORE --> ASI["OWASP ASI 2026 taxonomy"]
+    ASI --> SIGN[HMAC-SHA256 Signer]
+
+    SIGN --> R1[HTML Scorecard]
+    SIGN --> R2["SARIF 2.1.0 + native ASI taxonomy"]
+    SIGN --> R3[Signed JSON]
+    SIGN --> R4["AIBOM - CycloneDX 1.6"]
+```
+
+Full diagram (including the remote-scan sandbox flow), the four architectural
+detector modules explained, and the AWS services table:
+[`docs/architecture.md`](docs/architecture.md).
 
 ## A note on live AWS
 

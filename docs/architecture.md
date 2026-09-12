@@ -7,40 +7,40 @@ signs the result, and renders it four ways.
 
 ```mermaid
 flowchart TD
-    CLI["agentaudit run --agent &lt;file&gt;"] --> ORCH[Audit Orchestrator<br/><code>agentaudit/audit.py</code>]
-    DASH["agentaudit dashboard<br/>(stdlib http.server)"] -.local scan.-> ORCH
-    DASH -.."scan a public GitHub repo"..-> REMOTE
+    CLI["agentaudit run --agent FILE"] --> ORCH["Audit Orchestrator<br/>agentaudit/audit.py"]
+    DASH["agentaudit dashboard<br/>stdlib http.server"] -.->|local scan| ORCH
+    DASH -.->|"scan a public GitHub repo"| REMOTE
 
-    subgraph ARCH["Layer 2 · Architectural — DECISIVE GATE (ast only, deterministic)"]
-        SG["static_graph.py<br/>IDOR-in-Agent · Confused Deputy · Excessive Agency<br/>SSRF-via-tool-param · secret-in-prompt"]
-        CG["capability_graph.py<br/>exfiltration-capability-pair<br/>(WRITE/READ_SECRET/READ_DATA + NETWORK)"]
+    subgraph ARCH["Layer 2 - Architectural - DECISIVE GATE (ast only, deterministic)"]
+        SG["static_graph.py<br/>IDOR-in-Agent, Confused Deputy, Excessive Agency<br/>SSRF-via-tool-param, secret-in-prompt"]
+        CG["capability_graph.py<br/>exfiltration-capability-pair<br/>WRITE/READ_SECRET/READ_DATA + NETWORK"]
         SC["supply_chain.py<br/>tool-rug-pull (tool_spec drift)"]
-        HI["harness_integrity.py<br/>harness-model-skip-corebreak<br/>(CVE-2026-18830)"]
+        HI["harness_integrity.py<br/>harness-model-skip-corebreak<br/>CVE-2026-18830"]
     end
 
     ORCH --> ARCH
-    ORCH --> L1["Layer 1 · Behavioral<br/>prompt hygiene + strands_evals.redteam wrapper"]
-    ORCH --> L3["Layer 3 · Cloud Posture (read-only boto3)<br/>iam-least-privilege · guardrails-attached<br/>memory-encryption-ttl · runtime-network-mode · runtime-imdsv2"]
+    ORCH --> L1["Layer 1 - Behavioral<br/>prompt hygiene + strands_evals.redteam wrapper"]
+    ORCH --> L3["Layer 3 - Cloud Posture, read-only boto3<br/>iam-least-privilege, guardrails-attached<br/>memory-encryption-ttl, runtime-network-mode, runtime-imdsv2"]
 
     ARCH --> SCORE
     L1 --> SCORE
     L3 --> SCORE
 
-    SCORE["Unified Risk Scorer<br/>dedup by fingerprint · weight · grade A-F"] --> ASI["OWASP ASI 2026 taxonomy<br/><code>taxonomy/asi_2026.py</code><br/>12/14 rule_ids mapped, 2 explicit unmapped"]
-    ASI --> SIGN[HMAC-SHA256 Signer]
+    SCORE["Unified Risk Scorer<br/>dedup by fingerprint, weight, grade A-F"] --> ASI["OWASP ASI 2026 taxonomy<br/>taxonomy/asi_2026.py<br/>12 of 14 rule_ids mapped, 2 explicit unmapped"]
+    ASI --> SIGN["HMAC-SHA256 Signer"]
 
-    SIGN --> R1["HTML Scorecard<br/>+ ASI chip per finding"]
-    SIGN --> R2["SARIF 2.1.0<br/>native OWASP-ASI-2026 taxonomy<br/>+ relevant relationships"]
-    SIGN --> R3["Signed JSON<br/>CI gate · exit code"]
+    SIGN --> R1["HTML Scorecard<br/>plus ASI chip per finding"]
+    SIGN --> R2["SARIF 2.1.0<br/>native OWASP-ASI-2026 taxonomy<br/>plus relevant relationships"]
+    SIGN --> R3["Signed JSON<br/>CI gate, exit code"]
     SIGN --> R4["AIBOM<br/>CycloneDX 1.6<br/>tools+capabilities, model, deps, MCP, cap-pairs"]
 
-    subgraph REMOTE["Remote GitHub scan (agentaudit/dashboard/remote_scan.py)"]
-        VAL["validate URL<br/>(github.com only, no SSRF shapes)"] --> SIZE["GitHub API size + license precheck"]
-        SIZE --> CLONE["git clone --depth 1<br/>isolated temp dir · single-flight lock<br/>60s clone / 30s scan budget"]
-        CLONE --> RSCAN["SG + CG + HI<br/>(same 3 ast-only detectors — never imports the repo)"]
+    subgraph REMOTE["Remote GitHub scan - agentaudit/dashboard/remote_scan.py"]
+        VAL["validate URL<br/>github.com only, no SSRF shapes"] --> SIZE["GitHub API size + license precheck"]
+        SIZE --> CLONE["git clone --depth 1<br/>isolated temp dir, single-flight lock<br/>60s clone / 30s scan budget"]
+        CLONE --> RSCAN["SG + CG + HI<br/>same 3 ast-only detectors, never imports the repo"]
         RSCAN --> CLEAN["rmtree in finally<br/>(always, even on crash/timeout)"]
     end
-    RSCAN -.reuses.-> ARCH
+    RSCAN -.->|reuses| ARCH
 ```
 
 ## Data flow
