@@ -26,7 +26,18 @@ jobs:
       - name: Palette is colorblind-safe
         run: python scripts/check_palette.py
       - name: Unit + contract tests
-        run: pytest -q
+        run: |
+          set +e
+          pytest -q --tb=short 2>&1 | tee pytest_output.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            msg=$(tail -n 60 pytest_output.txt)
+            msg="${msg//'%'/'%25'}"
+            msg="${msg//$'\r'/'%0D'}"
+            msg="${msg//$'\n'/'%0A'}"
+            echo "::error::PYTEST FAILURE (last 60 lines): $msg"
+          fi
+          exit $code
       - name: Self-audit — vulnerable fixture must FAIL the gate
         run: |
           if python -m agentaudit run --agent fixtures/vulnerable_agent.py --out out/vuln; then
