@@ -50,12 +50,40 @@ def test_zero_agents_is_an_honest_empty_state():
     assert "no agent runtimes" in res.reason  # ...and we say why it's empty
 
 
+class _FakeCPDenied:
+    """Simulates an IAM AccessDenied on both discovery paths — no network, no
+    ambient AWS credentials required. (Previously this test made a real,
+    unmocked ``list_registered_agents()`` call: on a machine/CI runner with no
+    AWS credentials configured, botocore's credential-resolution chain is not
+    guaranteed to fail the same way everywhere, and the assertions only ran
+    ``if not res.available`` — so a real call that happened to succeed, or
+    fail in an uncaught shape, made this test vacuous or environment-flaky
+    instead of actually verifying the denial-handling contract.)"""
+
+    class _SM:
+        operation_names = ["ListAgentRuntimes"]  # no ListRegistries
+
+    meta = type("M", (), {"service_model": _SM()})()
+
+    def get_paginator(self, name):
+        raise Exception("no paginator")
+
+    def list_agent_runtimes(self, **kw):
+        import botocore.exceptions
+
+        raise botocore.exceptions.ClientError(
+            {"Error": {"Code": "AccessDeniedException", "Message": "not authorized"}},
+            "ListAgentRuntimes",
+        )
+
+
 def test_permission_failure_is_reported_not_swallowed():
     """A denied discovery must not look like 'zero agents'."""
-    res = list_registered_agents()  # real call, currently denied
-    if not res.available:
-        assert res.reason, "unavailable discovery must carry a reason"
-        assert res.agents == []
+    res = list_registered_agents(client=_FakeCPDenied())
+    assert res.available is False, "an AccessDenied must not be reported as available"
+    assert res.reason, "unavailable discovery must carry a reason"
+    assert "AccessDenied" in res.reason
+    assert res.agents == []
 
 
 def test_aggregate_totals_equal_sum_of_per_agent():
