@@ -141,7 +141,11 @@ def deploy_cedar_policy(
             api_status=resp.get("status"),
             enforcement_mode=resp.get("enforcementMode", enforcement_mode),
         )
-    except (botocore.exceptions.ClientError, ValueError) as e:
+    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError, ValueError) as e:
+        # ClientError = AWS rejected the (successfully sent) request;
+        # BotoCoreError = the request never went out at all (no/expired
+        # credentials, no region, DNS/connection failure) — both are "bad
+        # input or bad environment", never a reason to crash the caller's scan.
         result = DeployResult(
             status="error",
             dry_run=False,

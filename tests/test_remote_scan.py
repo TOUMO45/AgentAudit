@@ -232,14 +232,31 @@ def _patch_clone_with(monkeypatch, dest_builder):
     def fake_clone(target, dest, *, deadline):
         src = dest_builder()
         os.makedirs(dest, exist_ok=True)
-        for root, _dirs, names in os.walk(src):
+        for root, dirs, names in os.walk(src, followlinks=False):
+            rel_root = os.path.relpath(root, src)
+            # Recreate symlinked subdirectories as real symlinks at the
+            # destination (matching what a real `git clone` checkout does),
+            # then stop os.walk from descending into them itself.
+            for dname in list(dirs):
+                s = os.path.join(root, dname)
+                if os.path.islink(s):
+                    d = os.path.join(dest, rel_root, dname) if rel_root != "." else os.path.join(dest, dname)
+                    os.makedirs(os.path.dirname(d), exist_ok=True)
+                    os.symlink(os.readlink(s), d)
+                    dirs.remove(dname)
             for n in names:
                 s = os.path.join(root, n)
                 rel = os.path.relpath(s, src)
                 d = os.path.join(dest, rel)
                 os.makedirs(os.path.dirname(d), exist_ok=True)
-                with open(s, "rb") as a, open(d, "wb") as b:
-                    b.write(a.read())
+                if os.path.islink(s):
+                    # Preserve the symlink itself (never dereference-and-copy
+                    # its content) so escape-detection code is actually
+                    # exercised, the same way it would be against a real clone.
+                    os.symlink(os.readlink(s), d)
+                else:
+                    with open(s, "rb") as a, open(d, "wb") as b:
+                        b.write(a.read())
 
     monkeypatch.setattr(rs, "_git_clone", fake_clone)
 

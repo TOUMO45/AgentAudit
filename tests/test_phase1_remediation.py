@@ -100,10 +100,45 @@ def test_only_high_and_critical_are_remediated(tmp_path):
         assert len(results) < len(findings)
 
 
+class _FakeCPGatewayNotFound:
+    """Simulates AgentCore rejecting an unknown gateway — deterministic, no
+    network, no ambient AWS credentials required. (This test used to make a
+    real, unmocked live call with no client override: on a machine/CI runner
+    with zero AWS credentials configured anywhere, botocore raises
+    NoCredentialsError while *signing* the request — before any network I/O —
+    which deploy_cedar_policy's except clause did not catch, so the test
+    passed only on environments that happened to have some ambient AWS
+    credential able to reach a real ClientError instead.)"""
+
+    def get_gateway(self, gatewayIdentifier):  # noqa: N803
+        import botocore.exceptions
+
+        raise botocore.exceptions.ClientError(
+            {"Error": {"Code": "ResourceNotFoundException", "Message": "gateway not found"}},
+            "GetGateway",
+        )
+
+
 def test_deploy_never_raises_on_bad_input():
     """A failed live deploy returns an error result, it does not crash a scan."""
     res = deploy_cedar_policy("forbid();", gateway_id="does-not-exist",
                               finding_id="fid-err", dry_run=False,
-                              policy_engine_id=None)
+                              policy_engine_id=None, client=_FakeCPGatewayNotFound())
     assert res.status == "error"
     assert res.error
+
+
+def test_deploy_never_raises_with_no_aws_credentials_at_all():
+    """Same contract when boto3 can't even sign the request (no credentials
+    anywhere) — the exact failure mode a bare CI runner hits."""
+    class _NoCredsClient:
+        def get_gateway(self, gatewayIdentifier):  # noqa: N803
+            import botocore.exceptions
+
+            raise botocore.exceptions.NoCredentialsError()
+
+    res = deploy_cedar_policy("forbid();", gateway_id="does-not-exist",
+                              finding_id="fid-nocreds", dry_run=False,
+                              policy_engine_id=None, client=_NoCredsClient())
+    assert res.status == "error"
+    assert "NoCredentialsError" in res.error
