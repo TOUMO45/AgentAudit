@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentAudit — the missing security layer for Strands agents</title>
+<meta name="description" content="Three independent layers of adversarial testing for AWS Strands agents — static tool-trust graph, behavioral red-team, AgentCore/IAM cloud posture — unified into one signed scorecard, mapped to the OWASP Top 10 for Agentic Applications 2026.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a996ff' stroke-width='2'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0b13; --bg2:#0f111c;
+    --text:#f2f2f6; --muted:#9a9bb0; --muted2:#7d7e94; --muted3:#6f7086;
+    --glass:rgba(255,255,255,.045); --glass2:rgba(255,255,255,.07); --line:rgba(255,255,255,.10);
+    --a1:#a996ff; --a2:#ff6ec7;
+    --grad:linear-gradient(135deg,#a996ff 0%,#ff6ec7 100%);
+    --pass:#5ee6a8; --crit:#ff5470; --high:#ffb020; --med:#c9a6ff; --low:#5cc8ff;
+    --sans:'Manrope',system-ui,sans-serif; --display:'Sora',system-ui,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scrollbar-color:#2a2c3d transparent;scroll-behavior:smooth}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#2a2c3d;border-radius:8px}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+       font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  code,.mono{font-family:var(--mono)}
+  a{color:var(--a1);text-decoration:none}a:hover{color:var(--a2)}
+  img,svg{max-width:100%}
+  h1,h2,h3{font-family:var(--display);margin:0}
+
+  @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes drift{0%{transform:translate(-50%,0) scale(1)}50%{transform:translate(-47%,-3%) scale(1.08)}100%{transform:translate(-50%,0) scale(1)}}
+  @keyframes glowPulse{0%,100%{opacity:.55}50%{opacity:1}}
+  .reveal{opacity:0;animation:fadeUp .7s ease both}
+
+  .aurora{position:fixed;top:-20%;left:50%;width:1200px;height:720px;pointer-events:none;z-index:0;
+    background:radial-gradient(closest-side,color-mix(in srgb,#7c6cff 30%,transparent),transparent 70%);
+    filter:blur(16px);animation:drift 18s ease-in-out infinite}
+  .aurora2{position:fixed;top:35%;right:2%;width:560px;height:560px;pointer-events:none;z-index:0;
+    background:radial-gradient(closest-side,color-mix(in srgb,#ff6ec7 18%,transparent),transparent 70%);
+    filter:blur(18px)}
+  .grid-bg{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.45;
+    background-image:radial-gradient(color-mix(in srgb,white 6%,transparent) 1px,transparent 1px);
+    background-size:28px 28px}
+
+  .shell{position:relative;z-index:2}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+
+  /* nav */
+  nav.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;
+    padding:16px 24px;background:rgba(10,11,19,.65);backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line)}
+  nav.top .brand{display:flex;align-items:center;gap:8px;font-family:var(--display);font-weight:700;font-size:16px;white-space:nowrap}
+  nav.top .brand .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  nav.top .links{margin-left:auto;display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+  nav.top .links a{color:var(--muted);font-size:13.5px;font-weight:500}
+  nav.top .links a:hover{color:var(--text)}
+  nav.top .cta{background:var(--grad);color:#0a0b13;padding:8px 16px;border-radius:999px;
+    font-weight:700;font-size:13px;white-space:nowrap}
+  nav.top .cta:hover{color:#0a0b13;filter:brightness(1.08)}
+
+  /* hero */
+  .hero{padding:96px 0 64px;text-align:center}
+  .badgerow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:26px}
+  .badgerow img{height:20px;display:block}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;
+    color:var(--muted);border:1px solid var(--line);background:var(--glass);border-radius:999px;
+    padding:6px 14px;margin-bottom:26px}
+  .kicker .d{width:7px;height:7px;border-radius:50%;background:var(--pass);box-shadow:0 0 8px var(--pass);
+    animation:glowPulse 2s infinite}
+  h1.title{font-size:clamp(38px,6vw,68px);font-weight:800;line-height:1.04;letter-spacing:-.02em;margin-bottom:22px}
+  h1.title .g{display:block;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{max-width:62ch;margin:0 auto 36px;color:var(--muted);font-size:18px;line-height:1.6}
+  .lede b{color:var(--text);font-weight:600}
+  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:20px}
+  .btn{font-family:var(--display);font-weight:700;font-size:14.5px;padding:14px 26px;border-radius:999px;
+    display:inline-flex;align-items:center;gap:9px;cursor:pointer;border:1px solid var(--line);
+    background:var(--glass);color:var(--text);transition:.18s}
+  .btn:hover{background:var(--glass2);color:var(--text);transform:translateY(-2px)}
+  .btn.primary{background:var(--grad);color:#0a0b13;border-color:transparent;box-shadow:0 0 30px rgba(169,150,255,.35)}
+  .btn.primary:hover{color:#0a0b13;filter:brightness(1.06);box-shadow:0 0 40px rgba(169,150,255,.5)}
+  .honest{font-family:var(--mono);font-size:12.5px;color:var(--muted3);max-width:56ch;margin:0 auto}
+
+  /* sections */
+  section{padding:70px 0}
+  .sec-kicker{font-family:var(--display);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--a1);font-weight:700;margin-bottom:10px;text-align:center}
+  h2.sec-title{font-size:clamp(26px,4vw,38px);font-weight:800;text-align:center;letter-spacing:-.01em;margin-bottom:16px}
+  .sec-lede{max-width:64ch;margin:0 auto 48px;text-align:center;color:var(--muted);font-size:16px}
+
+  /* problem stat cards */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:8px}
+  .stat{background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:26px 22px;
+    backdrop-filter:blur(10px)}
+  .stat .n{font-family:var(--display);font-weight:800;font-size:34px;
+    background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .stat .l{font-size:13px;color:var(--muted);margin-top:6px;line-height:1.5}
+
+  /* layer cards */
+  .layers{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+  .lcard{background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:26px;
+    backdrop-filter:blur(10px);transition:.2s}
+  .lcard:hover{transform:translateY(-4px);border-color:rgba(169,150,255,.35)}
+  .lcard .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--a1);border:1px solid rgba(169,150,255,.3);background:rgba(169,150,255,.08);
+    border-radius:999px;padding:3px 10px;display:inline-block;margin-bottom:14px}
+  .lcard.gate .tag{color:var(--a2);border-color:rgba(255,110,199,.35);background:rgba(255,110,199,.08)}
+  .lcard h3{font-size:18px;margin-bottom:10px}
+  .lcard p{color:var(--muted);font-size:13.5px;margin:0 0 14px;line-height:1.6}
+  .lcard ul{margin:0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.9}
+  .lcard code{color:var(--low);font-size:12px}
+
+  /* scorecard gallery */
+  .gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+  .gcard{background:var(--glass);border:1px solid var(--line);border-radius:20px;padding:26px;
+    backdrop-filter:blur(10px);display:flex;flex-direction:column;gap:14px;transition:.2s}
+  .gcard:hover{transform:translateY(-4px)}
+  .gcard .top{display:flex;align-items:center;gap:16px}
+  .ring{position:relative;width:64px;height:64px;flex:0 0 auto}
+  .ring .g{font-family:var(--display);font-weight:800;font-size:22px}
+  .gcard .ttl{font-family:var(--mono);font-size:12.5px;color:var(--muted);word-break:break-all}
+  .gcard .desc{color:var(--muted);font-size:13.5px;line-height:1.55;flex:1}
+  .gcard .go{font-family:var(--display);font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}
+
+  /* AWS grid */
+  .awsgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .awscard{background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+  .awscard .n{font-family:var(--display);font-weight:700;font-size:14.5px;margin-bottom:6px;color:var(--text)}
+  .awscard .d{font-size:12.5px;color:var(--muted);line-height:1.5}
+
+  /* terminal / quickstart */
+  .term{background:#0b0c14;border:1px solid var(--line);border-radius:16px;overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  .term .bar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);
+    background:rgba(255,255,255,.02)}
+  .term .dot{width:10px;height:10px;border-radius:50%}
+  .term .dot.r{background:#ff5f57}.term .dot.y{background:#febc2e}.term .dot.g{background:#28c840}
+  .term .lbl{margin-left:8px;font-family:var(--mono);font-size:11.5px;color:var(--muted3)}
+  .term pre{margin:0;padding:20px 22px;font-family:var(--mono);font-size:13px;line-height:1.85;
+    color:#c9d4e0;overflow-x:auto}
+  .term .c1{color:var(--muted3)} .term .c2{color:var(--pass)} .term .c3{color:var(--low)}
+  .steps{counter-reset:step;display:flex;flex-direction:column;gap:14px;margin-top:20px}
+  .step{display:flex;gap:16px;align-items:flex-start;background:var(--glass);border:1px solid var(--line);
+    border-radius:14px;padding:16px 18px}
+  .step .num{counter-increment:step;flex:0 0 auto;width:28px;height:28px;border-radius:50%;
+    background:var(--grad);color:#0a0b13;font-family:var(--display);font-weight:800;font-size:13px;
+    display:flex;align-items:center;justify-content:center}
+  .step .num::before{content:counter(step)}
+  .step .txt{font-size:14px;color:var(--muted)}
+  .step .txt b{color:var(--text)}
+  .step code{font-family:var(--mono);font-size:12.5px;color:var(--low);background:rgba(0,0,0,.3);
+    padding:2px 7px;border-radius:5px}
+
+  /* real-world log */
+  .rw{background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:26px 28px;
+    backdrop-filter:blur(10px)}
+  .rw h4{margin:0 0 6px;font-size:15px}
+  .rw .meta{font-family:var(--mono);font-size:11.5px;color:var(--muted3);margin-bottom:8px}
+  .rw p{color:var(--muted);font-size:13.5px;margin:0}
+  .rw + .rw{margin-top:14px}
+  .pill{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:3px 9px;border-radius:999px;
+    margin-right:6px}
+  .pill.crit{background:rgba(255,84,112,.15);color:var(--crit)}
+  .pill.clean{background:rgba(94,230,168,.15);color:var(--pass)}
+
+  footer{border-top:1px solid var(--line);padding:40px 0;text-align:center}
+  footer .links{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;font-size:13.5px}
+  footer .fine{font-family:var(--mono);font-size:11.5px;color:var(--muted3)}
+
+  @media (max-width:720px){ nav.top .links{display:none} .hero{padding:64px 0 40px} }
+</style>
+</head>
+<body>
+<div class="aurora"></div><div class="aurora2"></div><div class="grid-bg"></div>
+<div class="shell">
+
+<nav class="top">
+  <div class="brand"><span class="g">Agent</span>Audit</div>
+  <div class="links">
+    <a href="#what">What it does</a>
+    <a href="#proof">Live proof</a>
+    <a href="#aws">AWS</a>
+    <a href="#try">Try it</a>
+    <a href="https://github.com/TOUMO45/AgentAudit" class="cta">GitHub ↗</a>
+  </div>
+</nav>
+
+<header class="hero wrap">
+  <div class="badgerow reveal">
+    <a href="https://github.com/TOUMO45/AgentAudit/actions/workflows/ci.yml"><img src="https://github.com/TOUMO45/AgentAudit/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+    <img src="agentaudit-badge.svg" alt="AgentAudit grade">
+    <img src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat&logo=python&logoColor=white" alt="Python 3.11+">
+    <img src="https://img.shields.io/badge/license-Apache--2.0-5ee6a8" alt="License: Apache-2.0">
+    <img src="https://img.shields.io/badge/SARIF-2.1.0-a996ff" alt="SARIF 2.1.0">
+    <img src="https://img.shields.io/badge/AIBOM-CycloneDX%201.6-ff6ec7" alt="CycloneDX 1.6 AIBOM">
+  </div>
+  <div class="kicker reveal"><span class="d"></span> live judge demo — every number below comes from a real scan, nothing is mocked</div>
+  <h1 class="title reveal" style="animation-delay:.05s">The missing security layer<span class="g">for Strands agents</span></h1>
+  <p class="lede reveal" style="animation-delay:.1s">AWS ships a red-team tool that tests <b>what your agent says</b>. AgentAudit tests
+    <b>what your agent's tools can actually do together</b> — and how it's deployed on AgentCore — in one
+    signed scorecard, with a diff-ready fix for every finding.</p>
+  <div class="cta-row reveal" style="animation-delay:.15s">
+    <a class="btn primary" href="scorecard-vulnerable.html">See a real CRITICAL scan →</a>
+    <a class="btn" href="https://github.com/TOUMO45/AgentAudit">View source on GitHub</a>
+  </div>
+  <p class="honest reveal" style="animation-delay:.2s">This page is a static, judge-facing build (GitHub Pages can't run Python).
+    The scorecards linked below are real HTML output rendered by the actual renderer against the actual fixtures — not mockups.</p>
+</header>
+
+<section class="wrap">
+  <div class="stats">
+    <div class="stat reveal"><div class="n">__RULE_COUNT__</div><div class="l">deterministic detector rule_ids across 4 architectural modules</div></div>
+    <div class="stat reveal" style="animation-delay:.05s"><div class="n">__ASI_MAPPED__/__RULE_COUNT__</div><div class="l">rule_ids mapped to the OWASP Top&nbsp;10 for Agentic Applications 2026</div></div>
+    <div class="stat reveal" style="animation-delay:.1s"><div class="n">4</div><div class="l">signed artifacts per run — HTML · SARIF 2.1.0 · JSON · CycloneDX 1.6 AIBOM</div></div>
+    <div class="stat reveal" style="animation-delay:.15s"><div class="n">1</div><div class="l">real, currently-open CVE detected in the harness itself (CVE-2026-18830 / CoreBreak)</div></div>
+  </div>
+</section>
+
+<section class="wrap" id="what">
+  <div class="sec-kicker reveal">Four independent layers</div>
+  <h2 class="sec-title reveal">One command. Every trust boundary.</h2>
+  <p class="sec-lede reveal">Each layer fails independently and answers a different question — deterministic checks
+    run first and are trusted before anything needing a model.</p>
+  <div class="layers">
+    <div class="lcard gate reveal"><span class="tag">Decisive gate</span>
+      <h3>Static Tool Trust Graph</h3>
+      <p>Parses the agent with the stdlib <code>ast</code> — no LLM, no execution — and flags patterns lifted
+        straight from web-app pentesting, mapped onto agent tools.</p>
+      <ul><li>IDOR-in-Agent</li><li>Confused Deputy</li><li>Excessive Agency</li>
+          <li>SSRF-via-tool-param</li><li>secret-in-prompt</li><li>Exfiltration capability pair</li></ul>
+    </div>
+    <div class="lcard reveal" style="animation-delay:.05s"><span class="tag">New · Sept 2026</span>
+      <h3>Harness Integrity</h3>
+      <p>Checks the agent's own code for the one thing it controls against <b>CoreBreak (CVE-2026-18830)</b> —
+        a real, currently-unpatched flaw in the Strands event loop that lets an attacker skip the model
+        entirely.</p>
+      <ul><li>Confirms the caller-supplied message history is sanitized before it reaches <code>Agent(...)</code></li>
+          <li>Never overclaims — the finding names the exact upstream function and CVE</li></ul>
+    </div>
+    <div class="lcard reveal" style="animation-delay:.1s"><span class="tag">Behavioral</span>
+      <h3>Model Red-Team</h3>
+      <p>Static prompt-hygiene checks plus a wrapper around AWS's own
+        <code>strands_evals.redteam</code>, auto-generating adversarial cases from the agent's real tool list.</p>
+      <ul><li>overbroad-authority-in-prompt</li><li>5 built-in risk categories</li>
+          <li>Crescendo / GOAT / PAIR / Sequential-Break strategies</li></ul>
+    </div>
+    <div class="lcard reveal" style="animation-delay:.15s"><span class="tag">Cloud posture</span>
+      <h3>AgentCore / IAM</h3>
+      <p>Read-only <code>boto3</code> (<code>Get*</code>/<code>List*</code> only) against a real deployed
+        AgentCore runtime, or offline against a deploy descriptor.</p>
+      <ul><li>iam-least-privilege</li><li>guardrails-attached</li><li>memory-encryption-ttl</li>
+          <li>runtime-network-mode</li><li>runtime-imdsv2</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="wrap" id="proof">
+  <div class="sec-kicker reveal">Not a mockup</div>
+  <h2 class="sec-title reveal">Real scorecards, rendered fresh on every deploy</h2>
+  <p class="sec-lede reveal">Every page below is generated by <code>agentaudit run</code>'s actual HTML renderer against the
+    actual fixture files, by the same GitHub Actions build that publishes this site.</p>
+  <div class="gallery">
+    <a class="gcard reveal" href="scorecard-vulnerable.html">
+      <div class="top">__RING_VULN__<div><div class="ttl">fixtures/vulnerable_agent.py</div></div></div>
+      <p class="desc">7 planted flaws across all 4 architectural detectors + behavioral + cloud. Exit&nbsp;1 — fails CI.</p>
+      <span class="go">Open the full scorecard →</span>
+    </a>
+    <a class="gcard reveal" style="animation-delay:.05s" href="scorecard-hardened.html">
+      <div class="top">__RING_HARD__<div><div class="ttl">fixtures/hardened_agent.py</div></div></div>
+      <p class="desc">Same agent family, every flaw fixed. Zero findings, exit&nbsp;0 — proves the tool can pass, not just always fail.</p>
+      <span class="go">Open the full scorecard →</span>
+    </a>
+    <a class="gcard reveal" style="animation-delay:.1s" href="scorecard-corebreak.html">
+      <div class="top">__RING_COREBREAK__<div><div class="ttl">fixtures/corebreak_vulnerable.py</div></div></div>
+      <p class="desc">Live CVE-2026-18830 (CoreBreak) demo — unsanitized caller message history reaching the event loop.</p>
+      <span class="go">Open the full scorecard →</span>
+    </a>
+  </div>
+</section>
+
+<section class="wrap" id="asi">
+  <div class="sec-kicker reveal">Standards-mapped</div>
+  <h2 class="sec-title reveal">Every finding tagged against OWASP ASI 2026</h2>
+  <p class="sec-lede reveal">The scorecard, the SARIF export, and the CLI all carry an <code>ASIxx</code> tag from the
+    <a href="https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/">OWASP Top 10 for Agentic Applications (2026)</a> —
+    a single source-of-truth mapping, with two findings honestly left <b>unmapped</b> rather than forced.</p>
+  <div class="awsgrid">
+    <div class="awscard"><div class="n">SARIF native taxonomy</div><div class="d">A real <code>OWASP-ASI-2026</code> toolComponent with 10 taxa and <code>relevant</code> relationships — not a free-text label. Validates against the official SARIF 2.1.0 schema.</div></div>
+    <div class="awscard"><div class="n">AI Bill of Materials</div><div class="d">A 4th artifact per run — a valid <a href="aibom.html">CycloneDX 1.6 BOM</a>: every tool + its capability class, dependencies, model, MCP servers, and exfiltration pairs as annotations.</div></div>
+    <div class="awscard"><div class="n">Scan a public GitHub repo, live</div><div class="d">The dashboard clones a public repo read-only (shallow, sandboxed, single-flight, 60s/30s budget) and runs the same ast-only detectors — never executes fetched code.</div></div>
+  </div>
+</section>
+
+<section class="wrap" id="realworld">
+  <div class="sec-kicker reveal">Real-world validation</div>
+  <h2 class="sec-title reveal">Verified against public repos we didn't write</h2>
+  <p class="sec-lede reveal">Every finding below was hand-verified by reading the real source at the flagged line —
+    file, commit, and line number cited in <a href="https://github.com/TOUMO45/AgentAudit/blob/master/references/real_world_findings.md">references/real_world_findings.md</a>.</p>
+  <div class="rw reveal">
+    <span class="pill crit">TRUE POSITIVE</span><span class="pill crit">CRITICAL</span>
+    <h4>kyopark2014/strands-agent — unrestricted RCE via <code>exec</code> and <code>bash</code> tools</h4>
+    <div class="meta">Apache-2.0 · commit 74af997 · application/strands_agent.py:195, :545, :278</div>
+    <p>Two tools run raw conversation input through <code>exec()</code>/<code>subprocess.run(shell=True)</code> with no
+      sandbox, plus a write→S3→public-URL exfiltration capability pair.</p>
+  </div>
+  <div class="rw reveal">
+    <span class="pill crit">TRUE POSITIVE</span><span class="pill crit">CRITICAL</span>
+    <h4>cagataycali/strands-fun-tools — confused deputy in <code>face_recognition</code></h4>
+    <div class="meta">Apache-2.0 · commit 741c090 · strands_fun_tools/face_recognition.py:12 (sink :177)</div>
+    <p>An untrusted <code>collection_id</code> reaches <code>rekognition.delete_faces(...)</code> behind only a
+      presence check, no ownership/authorization.</p>
+  </div>
+  <div class="rw reveal">
+    <span class="pill clean">CONFIRMED CLEAN</span>
+    <h4>strands-agents/agent-builder (official) &amp; eraykeskinmac/strands-hubspot</h4>
+    <div class="meta">Apache-2.0 / MIT</div>
+    <p>Zero findings on both — evidence the detectors don't over-fire on well-maintained, genuinely read-only code.</p>
+  </div>
+</section>
+
+<section class="wrap" id="aws">
+  <div class="sec-kicker reveal">Built on AWS</div>
+  <h2 class="sec-title reveal">AgentCore-native, not framework-generic</h2>
+  <p class="sec-lede reveal">Generic scanners don't understand AgentCore's own configuration surface. Every AWS call
+    AgentAudit makes itself is read-only (<code>Get*</code>/<code>List*</code> — never mutating).</p>
+  <div class="awsgrid">
+    <div class="awscard"><div class="n">Bedrock AgentCore Runtime</div><div class="d">Live posture check against a real deployed runtime — network mode, IMDSv2, workload identity.</div></div>
+    <div class="awscard"><div class="n">Bedrock AgentCore Identity</div><div class="d">Workload-identity posture; managed Consent-Portal check researched for future work.</div></div>
+    <div class="awscard"><div class="n">Bedrock AgentCore Gateway &amp; Policy Engine</div><div class="d">Target of generated, schema-valid Cedar policies that auto-remediate exfiltration capability pairs.</div></div>
+    <div class="awscard"><div class="n">Bedrock AgentCore Memory</div><div class="d">Encryption-at-rest and TTL posture check.</div></div>
+    <div class="awscard"><div class="n">Bedrock Guardrails</div><div class="d">Attached-and-active posture check on the execution role / runtime config.</div></div>
+    <div class="awscard"><div class="n">IAM</div><div class="d">Least-privilege analysis of the agent's execution role, offline or live read-only.</div></div>
+    <div class="awscard"><div class="n">ECR</div><div class="d">Container image for the deployed AgentCore runtime.</div></div>
+    <div class="awscard"><div class="n">CloudWatch Logs</div><div class="d">Observability target for the unified-tracing future-work item.</div></div>
+  </div>
+</section>
+
+<section class="wrap" id="try">
+  <div class="sec-kicker reveal">For judges &amp; reviewers</div>
+  <h2 class="sec-title reveal">Test it yourself — three commands, no AWS account needed</h2>
+  <p class="sec-lede reveal">The static detectors (the decisive gate) need nothing but Python. AWS credentials are only
+    used for the optional live cloud-posture checks.</p>
+  <div class="term reveal">
+    <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="lbl">terminal</span></div>
+    <pre><span class="c1"># 1. clone &amp; install</span>
+git clone https://github.com/TOUMO45/AgentAudit.git &amp;&amp; cd AgentAudit
+python -m venv .venv &amp;&amp; . .venv/Scripts/activate   <span class="c1"># Windows: .venv\Scripts\Activate.ps1</span>
+pip install -r requirements.txt &amp;&amp; pip install -e .
+
+<span class="c1"># 2. the before/after that tells the whole story</span>
+agentaudit run --agent fixtures/vulnerable_agent.py   <span class="c2"># GRADE F, exits 1</span>
+agentaudit run --agent fixtures/hardened_agent.py     <span class="c2"># GRADE A, exits 0</span>
+
+<span class="c1"># 3. the live dashboard — try "scan a public GitHub repo" yourself</span>
+agentaudit dashboard   <span class="c3"># opens http://127.0.0.1:8770 — paste any public Strands repo URL</span></pre>
+  </div>
+  <div class="steps">
+    <div class="step reveal"><span class="num"></span><div class="txt"><b>No install path:</b> every command above also works as
+      <code>python -m agentaudit &lt;cmd&gt;</code> from the repo root — no venv, no PATH setup.</div></div>
+    <div class="step reveal" style="animation-delay:.05s"><span class="num"></span><div class="txt"><b>Prove it isn't gamed:</b> run
+      <code>pytest</code> (__TEST_HINT__) and <code>./guard.sh check</code> (→ <code>INTEGRITY OK</code>) — the fixtures and detector code are hash-frozen.</div></div>
+    <div class="step reveal" style="animation-delay:.1s"><span class="num"></span><div class="txt"><b>Inspect every artifact:</b>
+      <code>out/scorecard.html</code>, <code>out/report.sarif</code>, <code>out/report.signed.json</code>, <code>out/aibom.json</code> — all four from one run.</div></div>
+    <div class="step reveal" style="animation-delay:.15s"><span class="num"></span><div class="txt"><b>Try the live remote scan:</b> in the dashboard, paste
+      <code>strands-agents/agent-builder</code> (or any <code>owner/repo</code>) into "or scan a public GitHub repo" — it shallow-clones and statically scans it in front of you, read-only.</div></div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <div class="links">
+    <a href="https://github.com/TOUMO45/AgentAudit">Repository</a>
+    <a href="https://github.com/TOUMO45/AgentAudit#readme">README</a>
+    <a href="https://github.com/TOUMO45/AgentAudit/blob/master/docs/architecture.md">Architecture</a>
+    <a href="https://github.com/TOUMO45/AgentAudit/blob/master/STATUS.md">Status</a>
+    <a href="https://github.com/TOUMO45/AgentAudit/blob/master/LICENSE">Apache-2.0</a>
+  </div>
+  <div class="fine">Built for the AWS × Strands hackathon · generated __BUILD_TIME__ from commit __COMMIT_SHA__ · this page makes no network calls and stores nothing</div>
+</footer>
+
+</div>
+</body>
+</html>

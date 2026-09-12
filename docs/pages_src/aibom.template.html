@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentAudit — sample AIBOM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0a0b13;--text:#f2f2f6;--muted:#9a9bb0;--line:rgba(255,255,255,.1);--glass:rgba(255,255,255,.045);
+        --a1:#a996ff;--a2:#ff6ec7;--grad:linear-gradient(135deg,#a996ff,#ff6ec7);
+        --mono:'IBM Plex Mono',ui-monospace,monospace;--display:'Sora',system-ui,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);padding:0 0 60px}
+  .wrap{max-width:900px;margin:0 auto;padding:0 24px}
+  header{padding:26px 0;border-bottom:1px solid var(--line);margin-bottom:26px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .brand{font-family:var(--display);font-weight:800;font-size:18px}
+  .brand .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  a{color:var(--a1);text-decoration:none} a:hover{color:var(--a2)}
+  .back{margin-left:auto;font-size:13px}
+  h1{font-family:var(--display);font-size:22px;margin:0 0 8px}
+  .lede{color:var(--muted);font-size:13.5px;line-height:1.6;margin-bottom:24px;max-width:74ch}
+  .lede code{color:var(--a1)}
+  pre{background:#0b0c14;border:1px solid var(--line);border-radius:14px;padding:22px;overflow-x:auto;
+      font-size:12.5px;line-height:1.6;color:#c9d4e0}
+  .k{color:#7ec8ff}.s{color:#a8e6a3}.n{color:#ffb020}.b{color:#c9a6ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand"><span class="g">Agent</span>Audit</div>
+  <a class="back" href="index.html">← back</a>
+</header>
+<h1>Sample AIBOM — fixtures/vulnerable_agent.py</h1>
+<p class="lede">A real, freshly-generated <b>AI Bill of Materials</b> — a valid CycloneDX 1.6 BOM, the same
+  <code>out/aibom.json</code> a local <code>agentaudit run</code> produces. Built from a single <code>ast</code> parse
+  of the agent (never imported or executed); every tool's capability class comes straight from the same
+  <code>classify_tool()</code> the Layer 2 engine uses. See
+  <a href="https://github.com/TOUMO45/AgentAudit/blob/master/references/aibom_format.md">references/aibom_format.md</a>
+  for the CycloneDX-vs-custom-schema decision.</p>
+<pre id="j">__AIBOM_JSON__</pre>
+</div>
+</body>
+</html>

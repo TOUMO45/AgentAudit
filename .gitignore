@@ -9,6 +9,7 @@ dist/
 
 # AgentAudit run outputs
 out/
+_site/
 *.sarif
 scorecard.html
 report.signed.json

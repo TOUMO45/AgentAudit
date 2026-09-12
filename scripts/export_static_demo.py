@@ -1,11 +1,14 @@
-"""Export the vulnerable-fixture scorecard as a single static page (item 2.9).
+"""Export any one scorecard as a single static HTML page (item 2.9).
 
 Produces a self-contained HTML file (no backend, no auth, no per-user state — it
-does not accept input or run scans) suitable for GitHub Pages so judges can open
-the demo without cloning. This stays firmly on the static-artifact side of the
-charter's 'no hosted SaaS' anti-goal.
+does not accept input or run scans). This stays firmly on the static-artifact
+side of the charter's 'no hosted SaaS' anti-goal.
 
-    python scripts/export_static_demo.py            # -> docs/demo/index.html
+The live GitHub Pages judge site is built by ``scripts/build_pages_site.py``
+instead (a richer, multi-page site); this script remains for quick, one-off
+local exports of a single agent's scorecard.
+
+    python scripts/export_static_demo.py --agent fixtures/vulnerable_agent.py --out /tmp/scorecard.html
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ from agentaudit.report import renderer  # noqa: E402
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--agent", default="fixtures/vulnerable_agent.py")
-    ap.add_argument("--out", default="docs/demo/index.html")
+    ap.add_argument("--out", default="out/scorecard.html")
     args = ap.parse_args()
 
     card = run_audit(args.agent)
