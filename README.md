@@ -78,7 +78,7 @@ Full breakdown in **[STATUS.md](STATUS.md)**. In short:
   deadline). Each is either built + unit-tested, or fully researched with the
   reasoning on record.
 
-**213 tests** (211 pass, 2 intentionally skipped); `./guard.sh check` →
+**214 tests** (212 pass, 2 intentionally skipped); `./guard.sh check` →
 `INTEGRITY OK` (37 fixture/detector paths hash-frozen); CI green on a clean
 Linux / Python 3.11 checkout.
 
@@ -111,7 +111,7 @@ agentaudit dashboard   # opens http://127.0.0.1:8770 — paste any owner/repo
 
 1. **No install path:** every command above also works as
    `python -m agentaudit <cmd>` from the repo root — no venv, no PATH setup.
-2. **Prove it isn't gamed:** run `pytest` (213 tests) and `./guard.sh check`
+2. **Prove it isn't gamed:** run `pytest` (214 tests) and `./guard.sh check`
    (→ `INTEGRITY OK`) — the fixtures and every detector module are
    hash-frozen, so a tampered fixture or detector is caught with its exact
    diff, not silently accepted.
@@ -309,7 +309,7 @@ fixture.** The trap logic (why each fixture can pass, not only fail) is in
 pytest
 ```
 
-213 tests. The suite encodes the charter's success conditions directly: each
+214 tests. The suite encodes the charter's success conditions directly: each
 pattern class flagged on its positive with zero false positives on the
 hardened control, the vulnerable→fail / hardened→clean / stub→zero gates, the
 four-format output contract (HTML/SARIF/JSON/AIBOM validated against **both**

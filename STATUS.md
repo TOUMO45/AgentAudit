@@ -28,7 +28,14 @@ close to the deadline.
 | **Dashboard** — stdlib HTTP server, all 3 pipeline stages resolve to real data | `agentaudit dashboard`; cross-checked API vs CLI (F / 100 / 7); no stage stuck on RUNNING |
 | **CI** — green on a clean Linux / Python 3.11 checkout | GitHub Actions `agentaudit-ci` |
 
-**197 tests (195 pass, 2 skipped). `guard.sh check` → INTEGRITY OK.** (`agentaudit`
+**214 tests (212 pass, 2 skipped). `guard.sh check` → INTEGRITY OK.** CI is
+**green on origin/master** on a real GitHub Actions run (Linux, Python 3.11) —
+the first fully-green run since before this round of work; two genuine,
+environment-dependent test bugs were found and fixed to get there (see
+git history: an unmocked live AWS call with no credential fallback in the
+deploy-error path, and a test-harness helper that silently flattened
+symlinks into regular files, so the symlink-escape test — skipped on
+Windows — had never actually run before). (`agentaudit`
 console script: run `python -m pip install -e .` in the interpreter you use, or
 just `python -m agentaudit <cmd>` from the repo root.)
 
